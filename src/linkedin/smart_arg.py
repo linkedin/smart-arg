@@ -63,8 +63,7 @@ All other classes and methods in this module are considered implementation detai
 __all__ = (
     'arg_suite',
     'custom_arg_suite',
-    'ArgSuite',
-    'LateInit',
+    'ArgSuite', 'LateInit',
     'SmartArgError',
     'TypeHandler',
     'PrimitiveHandlerAddon',
@@ -79,8 +78,7 @@ import tokenize
 import warnings
 from argparse import Action, ArgumentParser
 from types import SimpleNamespace as KwargsType  # type for kwargs for `ArgumentParser.add_argument`, currently just an alias
-from typing import (Any, Collection, Dict, Generic, Iterable, List, NamedTuple,
-                    Optional, Sequence, Set, Tuple, Type, TypeVar, Union)
+from typing import Any, Collection, Dict, Generic, Iterable, List, NamedTuple, Optional, Sequence, Set, Tuple, Type, TypeVar, Union
 
 
 class DefaultMarker:
@@ -109,8 +107,13 @@ if sys.version_info >= (3, 8):
     # "Python >= 3.8. from typing import get_origin, get_args ")
     from typing import get_args, get_origin
 elif sys.version_info >= (3, 7):
-    # Python == 3.7.x. Defining the back-ported get_origin, get_args ")
-    get_origin, get_args = lambda tp: vars(tp).get('__origin__'), lambda tp: vars(tp).get('__args__') if vars(tp).get('__args__') else ()  # noqa: E731
+    # Python == 3.7.x. Defining the back-ported get_origin, get_args
+    # 3.7 `List.__origin__ == list`
+    get_origin, get_args = lambda tp: getattr(tp, '__origin__', None), lambda tp: getattr(tp, '__args__', ())  # noqa: E731
+elif sys.version_info >= (3, 6):
+    # Python == 3.6.x. Defining get_origin, get_args ")
+    # 3.6 `List.__origin__ == List`, `Optional` does not have `__dict__`
+    get_origin, get_args = lambda tp: getattr(tp, '__extra__', ()) or getattr(tp, '__origin__', None), lambda tp: getattr(tp, '__args__', ())  # noqa: E731
 else:
     try:
         logger.warning(f"Unsupported python version {sys.version_info} < 3.7. Try 'from typing_inspect import get_origin, get_args' now.")
