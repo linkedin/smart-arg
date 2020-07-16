@@ -3,8 +3,8 @@
 This module is an command-line argument library that:
 
     - generates argparse.ArgumentParser based a NamedTuple classed argument
-    - handles two-way conversions: a typed argument object (A NamedTuple) <-> a command-line argv
-    - enables IDE type hints and code auto-completion
+    - handles two-way conversions: a typed argument object (A `NamedTuple`) <-> a command-line argv
+    - enables IDE type hints and code auto-completion by using `NamedTuple`
     - promotes type-safety of command-line arguments
 
 
@@ -60,7 +60,14 @@ The module contains the following public classes:
 All other classes and methods in this module are considered implementation details.
 """
 
-__all__ = ('arg_suite', 'custom_arg_suite', 'ArgSuite', 'LateInit', 'SmartArgError', 'TypeHandler', 'PrimitiveHandlerAddon')
+__all__ = (
+    'arg_suite',
+    'custom_arg_suite',
+    'ArgSuite', 'LateInit',
+    'SmartArgError',
+    'TypeHandler',
+    'PrimitiveHandlerAddon')
+
 import inspect
 import logging
 import os
@@ -68,9 +75,10 @@ import re
 import sys
 import tokenize
 import warnings
-from argparse import ArgumentParser, Action
+from argparse import Action, ArgumentParser
 from types import SimpleNamespace as KwargsType  # type for kwargs for `ArgumentParser.add_argument`, currently just an alias
-from typing import Optional, Tuple, Dict, Sequence, Generic, TypeVar, Set, Any, Iterable, Union, NamedTuple, List, Type, Collection
+from typing import (Any, Collection, Dict, Generic, Iterable, List, NamedTuple,
+                    Optional, Sequence, Set, Tuple, Type, TypeVar, Union)
 
 
 class DefaultMarker:
@@ -83,27 +91,30 @@ class LateInit:
     pass
 
 
-PRIMITIVES = {str, int, float, bool}
-RESTORE_OPTIONAL = re.compile(f'Union\\[({"|".join((p.__name__ for p in PRIMITIVES))}), NoneType\\]')
-logger = logging.getLogger(__name__)
-level_key = 'SMART_ARG_LOG_LEVEL'
-if level_key in os.environ:
-    logger.addHandler(logging.StreamHandler())
-    log_level = os.environ[level_key].upper()
-    logger.setLevel(log_level)
-    logger.info(f"Detected environment var `{level_key}, set log level to '{log_level}' and log to stream.")
 ArgType = TypeVar('ArgType', bound=NamedTuple)  # NamedTuple is not a real class bound, but setting `bound` to NamedTuple makes mypy happier
 FieldMeta = NamedTuple('FieldMeta', [('comment', str), ('default', Any), ('type', Type)])
+
+PRIMITIVES = {str, int, float, bool}
+RESTORE_OPTIONAL = re.compile(f'Union\\[({"|".join((p.__name__ for p in PRIMITIVES))}), NoneType\\]')
+
+logger = logging.getLogger(__name__)
+LEVEL_KEY = 'SMART_ARG_LOG_LEVEL'
+if LEVEL_KEY in os.environ:
+    logger.addHandler(logging.StreamHandler())
+    log_level = os.environ[LEVEL_KEY].upper()
+    logger.setLevel(log_level)
+    logger.info(f"Detected environment var `{LEVEL_KEY}, set log level to '{log_level}' and log to stream.")
+
 if sys.version_info >= (3, 8):
     logger.info(f"Python {sys.version_info} >= 3.8. from typing import get_origin, get_args ")
-    from typing import get_origin, get_args
+    from typing import get_args, get_origin
 elif sys.version_info >= (3, 7):
     logger.info(f"Python {sys.version_info} == 3.7.x. Defining get_origin, get_args ")
     get_origin, get_args = lambda tp: vars(tp).get('__origin__'), lambda tp: vars(tp).get('__args__') if vars(tp).get('__args__') else ()  # noqa: E731
 else:
     try:
         logger.warning(f"Unsupported python version {sys.version_info} < 3.7. Try 'from typing_inspect import get_origin, get_args' now.")
-        from typing_inspect import get_origin, get_args
+        from typing_inspect import get_args, get_origin
     except ImportError as e:
         warnings.warn(f"`from typing_inspect import get_origin, get_args` failed for "
                       f"unsupported python version {sys.version_info} < 3.7. It might work with 'pip install typing_inspect'.")
@@ -114,13 +125,13 @@ class SmartArgError(Exception):  # TODO Extend to better represent different typ
     pass
 
 
-class PrimitiveHandlerAddon(object):
+class PrimitiveHandlerAddon:
     """
     Primitive handler addon to do some special handling on the primitive types.
     Users want to modify the primitive handling can inherit this class.
     """
     @staticmethod
-    def build_primitive(arg_type: Type, kwargs: KwargsType):
+    def build_primitive(arg_type: Type, kwargs: KwargsType) -> None:
         kwargs.type = arg_type
         if arg_type is bool:
             kwargs.type = PrimitiveHandlerAddon.build_type(arg_type)
@@ -132,7 +143,7 @@ class PrimitiveHandlerAddon(object):
     handled_types: Collection[Type] = PRIMITIVES
 
 
-class TypeHandler(object):
+class TypeHandler:
     """
     Base Non-Primitive type handler
     """
@@ -238,7 +249,7 @@ class TupleHandler(TypeHandler):
         kwargs.metavar = tuple(self.type_to_str(t) for t in types)
         p_addons = self.primitive_addons
 
-        class BuildType(object):
+        class BuildType:
             def __init__(self):
                 self.counter = 0
 
@@ -492,7 +503,7 @@ class ArgSuite(Generic[ArgType]):
                     required = parent_required and default is DefaultMarker
                     self._gen_arguments_from_class(arg_type, f'{arg_name}.', required)
 
-                    class ShouldNotSpecify(object):
+                    class ShouldNotSpecify:
                         def __init__(self, name):
                             self.name = name
 
@@ -565,13 +576,13 @@ class ArgSuite(Generic[ArgType]):
                 if err.args != (f"'{obj.__class__.__name__}' object has no attribute '{fun}'",):
                     raise err
                 return obj
-        parse_arg = call_if_defined(parse_arg, '_post_process_')
+        parse_arg = call_if_defined(parse_arg, '__post_process__')
         if parse_arg.__class__ is not self._arg_class:
             raise SmartArgError(f"Expect post_process to return a '{self._arg_class}', but got '{parse_arg.__class__}'.")
         for f in self._arg_class._fields:
             if getattr(parse_arg, f) is LateInit:
                 raise SmartArgError(f"Field '{f} is still not initialized after post processing")
-        call_if_defined(parse_arg, '_validate_')
+        call_if_defined(parse_arg, '__validate__')
         return parse_arg
 
     def _gen_cmd_argv(self, args, prefix) -> Iterable[str]:

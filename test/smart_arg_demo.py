@@ -32,19 +32,19 @@ class MyTup(NamedTuple):
     embedding_dim: int = 100  # Size of embedding vector
     lr: float = 1e-3  # Learning rate
 
-    def _validate_(self):
+    def __validate__(self):
         for f in self:
             print(f)
         assert self.n
 
-    def _post_process_(self) -> 'MyTup':
+    def __post_process__(self) -> 'MyTup':
         processed = self
         if processed.n is None:
             processed = processed._replace(n=processed.nn[0])
         return processed
 
 
-expected_arg = MyTup(nn=[200, 300], encoder="fastText", a_tuple=("s", 5), h_param={"y": 1, "n": 0}, nested=NestedArg())._post_process_()
+expected_arg = MyTup(nn=[200, 300], encoder="fastText", a_tuple=("s", 5), h_param={"y": 1, "n": 0}, nested=NestedArg()).__post_process__()
 parsed = MyTup(sys.argv[1:])
 if parsed == expected_arg:
     print(f"Matched: '{parsed}'")

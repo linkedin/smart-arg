@@ -75,18 +75,18 @@ def test_post_process():
         a_int: int = LateInit  # if a_int is not in the argument, post_process will initialize it
 
     pytest.raises(SmartArgError, MyTup, [])
-    MyTup._post_process_ = lambda s: None
+    MyTup.__post_process__ = lambda s: None
     pytest.raises(SmartArgError, MyTup, [])
 
     def post_process(self):
         if self.a_int is LateInit:
             return self._replace(a_int=10)
 
-    MyTup._post_process_ = post_process
+    MyTup.__post_process__ = post_process
     arg = MyTup([])
     assert arg.a_int == 10
     assert MyTup(a_int=0).a_int == 0
-    del MyTup._post_process_
+    del MyTup.__post_process__
     assert MyTup(a_int=0).a_int == 0
 
 
@@ -100,7 +100,7 @@ def test_validate():
         nonlocal validated
         validated = True
         raise AttributeError()
-    MyTup._validate_ = validate
+    MyTup.__validate__ = validate
     pytest.raises(AttributeError, MyTup, ['--a_int', '1'])
     assert validated, "`validate` might not be executed."
 
@@ -108,7 +108,7 @@ def test_validate():
     class MyTuple(NamedTuple):
         abc: str
 
-        def _validate_(self):
+        def __validate__(self):
             if self.abc != 'abc':
                 raise AttributeError()
 
@@ -155,9 +155,12 @@ def test_argv():
         e_dict_str_int={'size': 32, 'area': 90}
     )
     cmd_line = expected_arg.to_argv()
-    with unittest.mock.patch('sys.argv', cmd_line):
-        parsed_arg = main(sys.argv)
-        assert parsed_arg == expected_arg
+    with unittest.mock.patch('sys.argv', ['mock'] + cmd_line):
+        parsed = main(sys.argv[1:])
+        parsed_factory = MockArgTup.from_argv()
+
+        assert parsed == parsed_factory
+        assert parsed == expected_arg
 
 
 def test_primitive_addon():
@@ -205,7 +208,7 @@ def test_nested():
     pytest.raises(SmartArgError, Nested, ['--a_int', '0', '--nested', 'raise'])
 
 
-def test_cml_execution():
+def test_cli_execution():
     demo = f'{sys.executable if sys.executable else "python"} {os.path.join(os.path.dirname(__file__), "smart_arg_demo.py")}'
     args = '--nn 200 300 --a_tuple s 5 --encoder fastText --h_param y:1 n:0 --nested.n_nested.n_' \
            'name "nested name" --n None --embedding_dim 100 --lr 0.001'

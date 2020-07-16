@@ -1,6 +1,6 @@
 # Smart Arguments Suite `(smart-arg`)
 
-Smart Arguments Suite (`smart-arg`) is a slim and handy python lib that help one work safely and conveniently with
+Smart Arguments Suite (`smart-arg`) is a slim and handy Python library that help one work safely and conveniently with
 command line arguments. It will generate a 
 [argparse.ArgumentParser](https://docs.python.org/3/library/argparse.html#argumentparser-objects) based on 
 the associated [`NameTuple`](https://docs.python.org/3.7/library/typing.html?highlight=namedtuple#typing.NamedTuple) 
@@ -34,28 +34,25 @@ from typing import NamedTuple, List, Tuple, Set, Dict, Optional
 from linkedin.smart_arg import arg_suite
 
 @arg_suite
-class MyTup(NamedTuple):
+class MyArg(NamedTuple):
     """
-    MyTup docstring goes to description
+    MyArg is smart! (docstring goes to description)
     """
-    a_int: int  # a is int
-    a_float: float  # a is float
-    a_bool: bool
-    a_str: str
-    _a_str = {'choices': ['hello', 'bonjour', 'hola']}  # advanced usage: overwrite the a_str argument choices
-    b_list_int: List[int]
-    b_set_str: Set[str]
-    c_optional_float: Optional[float]
-    d_tuple_3: Tuple[int, float, bool]
-    d_tuple_2: Tuple[str, int]
-    e_dict_str_int: Dict[str, int]
-    e_dict_int_bool: Dict[int, bool]
+    nn: List[int]  # Comments go to argparse help
+    a_tuple: Tuple[str, int]  # a random tuple argument
+    encoder: str  # Text encoder type
+    h_param: Dict[str, int]  # Hyperparameters
+    batch_size: Optional[int] = None
+    adp: bool = True  # bool is a bit tricky
+    embedding_dim: int = 100  # Size of embedding vector
+    lr: float = 1e-3  # Learning rate
 
 
 def main(argv):
-    parsed_tup = MyTup(argv)
-    # parsed_tup can be used in later script
+    parsed_arg = MyArg(argv)
+    # parsed_arg can be used in later script
     # ...
+    print(f"My network has {len(parsed_arg.nn)} layers with size of {parsed_arg.nn}.")
 
 
 if __name__ == '__main__':
@@ -75,7 +72,7 @@ if __name__ == '__main__':
 
 A user can define a method in the argument class to do post processing after the parsing is done.
 For example, when a field's default value depends on some other input fields, one could use a default
-placeholder `LateInit`, and a `_post_process_` function to define the actual value:
+placeholder `LateInit`, and a `__post_process__` function to define the actual value:
 ```python
 @arg_suite
 class MyArg(NamedType):
@@ -83,33 +80,33 @@ class MyArg(NamedType):
     _network = {'choices': ['cnn', 'mlp']}
     num_layers: int = LateInit
     
-    def _post_process_(self) -> 'MyArg':
+    def __post_process__(self) -> 'MyArg':
         if self.num_layers is LateInit:
             if self.network == 'cnn':
                 num_layers = 3
             elif self.network == 'mlp':
                 num_layers = 5
             else:
-                assert False, "Not reachable"
+                raise AssertionError('Not reachable')
         return self._replace(num_layers = num_layers)
 ```
-Note that if any fields are assigned a default placeholder `LateInit`, a `_post_process_` is expected
+Note that if any fields are assigned a default placeholder `LateInit`, a `__post_process__` is expected
 to be defined, replace any `LateInit` with actual values and return an argument(NamedTuple) instance, 
 or it will raise a `SmartArgError`.
 
 ### validate
 
-An optional `_validate_` function can be defined to validated the parsed argument:
+An optional `__validate__` function can be defined to validated the parsed argument:
 ```python
 @arg_suite
 class MyArg(NamedType):
     num_layers: int
     
-    def _validate_(self):
+    def __validate__(self):
         assert self.num_layers >= 0, f"number_layers: {self.num_layers} can not be negative"
 ```
 ## promoted practices:
-* Focus on defining the arguments diligently, and let the `smart-arg` to handle ser/de to command line consistently.  
+* Focus on defining the arguments diligently, and let the `smart-arg` to handle the serialization/deserialization from/to command line consistently.  
 * Stick to the default parsing behavior, try to avoid using [_kwArg](#overwrite-argument-fields) to overwrite `type`
 * If possible, always work directly with argument `NamedTuple` object, even if you only need the command line counterpart.
 

@@ -11,8 +11,11 @@ class MockArgTup(NamedTuple):
     e_dict_str_int: Dict[str, int]
 
 
-def main(args: List[str] = None):
+def main(args: List[str]):
     parsed_tup = MockArgTup(args)
+    parsed_factory = MockArgTup.from_argv()
+
+    assert parsed_tup == parsed_factory
     return parsed_tup
 
 
