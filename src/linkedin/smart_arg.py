@@ -120,10 +120,10 @@ else:
                       f"The package may or may not work properly. "
                       f"Try 'from typing_inspect import get_origin, get_args' now.")
         from typing_inspect import get_args, get_origin
-    except ImportError as e:
+    except ImportError:
         warnings.warn(f"`from typing_inspect import get_origin, get_args` failed for "
                       f"unsupported python version {sys.version_info} < 3.6. It might work with 'pip install typing_inspect'.")
-        raise e
+        raise
 
 
 class SmartArgError(Exception):  # TODO Extend to better represent different types of errors.
@@ -412,10 +412,10 @@ def custom_arg_suite(separator: str = None, type_handlers: List[Type[TypeHandler
                 try:
                     return __new(arg_class, **kwargs)
                 except TypeError as err:
-                    # Change the message for missing arguments
+                    # Change the message for missing arguments as the patched constructor only takes keyword argument
                     err.args = (err.args[0].replace('positional argument', 'keyword argument'),)
                     logger.error("Creating NamedTuple failed. Might be missing required keyword arguments")
-                    raise err
+                    raise
         # monkey patch the class
         setattr(cls, '__new__', __new__wrapper)
         setattr(cls, 'to_argv', lambda self: to_cmd_argv(self))
@@ -544,7 +544,7 @@ class ArgSuite(Generic[ArgType]):
                         self.handler_actions[arg_name] = handler, self._parser.add_argument(f'--{arg_name}', **vars(kwargs))
                 except BaseException as b_e:
                     logger.fatal(f"Failed creating argument parser for {arg_name} with exception {b_e}.")
-                    raise b_e
+                    raise
 
     def parse_to_arg(self, argv: Sequence[str], *, error_on_unknown: bool = True) -> ArgType:
         """
@@ -583,7 +583,7 @@ class ArgSuite(Generic[ArgType]):
                 return getattr(obj, fun)()
             except AttributeError as err:
                 if err.args != (f"'{obj.__class__.__name__}' object has no attribute '{fun}'",):
-                    raise err
+                    raise
                 return obj
         parse_arg = call_if_defined(parse_arg, '__post_process__')
         if parse_arg.__class__ is not self._arg_class:

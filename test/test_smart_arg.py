@@ -45,7 +45,8 @@ my_tup_basic = MyTupBasic(
 
 
 def test_basic_parse_to_arg():
-    pytest.raises(TypeError, MyTupBasic)
+    with pytest.raises(TypeError, match="missing 11 required keyword arguments"):
+        MyTupBasic()
     arg_cmd = '--a_int 32 --a_float 0.3 --a_bool True --a_str hello --b_list_int 1 2 3 --b_set_str set1 set2 --c_optional_float None ' + \
               '--d_tuple_3 10 0.5 False --d_tuple_2 tuple 12 --e_dict_str_int size:32 area:90 --e_dict_int_bool 10:True 20:False 30:True --with_default 10'
     parsed_arg = MyTupBasic(arg_cmd.split())
