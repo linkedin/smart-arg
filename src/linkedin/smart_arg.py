@@ -116,11 +116,13 @@ elif sys.version_info >= (3, 6):
     get_origin, get_args = lambda tp: getattr(tp, '__extra__', ()) or getattr(tp, '__origin__', None), lambda tp: getattr(tp, '__args__', ())  # noqa: E731
 else:
     try:
-        logger.warning(f"Unsupported python version {sys.version_info} < 3.7. Try 'from typing_inspect import get_origin, get_args' now.")
+        warnings.warn(f"Unsupported and untested python version {sys.version_info} < 3.6. "
+                      f"The package may or may not work properly. "
+                      f"Try 'from typing_inspect import get_origin, get_args' now.")
         from typing_inspect import get_args, get_origin
     except ImportError as e:
         warnings.warn(f"`from typing_inspect import get_origin, get_args` failed for "
-                      f"unsupported python version {sys.version_info} < 3.7. It might work with 'pip install typing_inspect'.")
+                      f"unsupported python version {sys.version_info} < 3.6. It might work with 'pip install typing_inspect'.")
         raise e
 
 
@@ -501,44 +503,48 @@ class ArgSuite(Generic[ArgType]):
             comments = self.get_comments(arg_class)
             for raw_arg_name, arg_type in arg_class._field_types.items():
                 arg_name = f'{prefix}{raw_arg_name}'
-                default = arg_class._field_defaults.get(raw_arg_name, DefaultMarker)  # TODO move to meta
-                if self.is_arg_type(arg_type):
-                    required = parent_required and default is DefaultMarker
-                    self._gen_arguments_from_class(arg_type, f'{arg_name}.', required)
+                try:
+                    default = arg_class._field_defaults.get(raw_arg_name, DefaultMarker)  # TODO move to meta
+                    if self.is_arg_type(arg_type):
+                        required = parent_required and default is DefaultMarker
+                        self._gen_arguments_from_class(arg_type, f'{arg_name}.', required)
 
-                    class ShouldNotSpecify:
-                        def __init__(self, name):
-                            self.name = name
+                        class ShouldNotSpecify:
+                            def __init__(self, name):
+                                self.name = name
 
-                        def __call__(self, _):
-                            raise SmartArgError(f"Nested argument '{self.name}' can not be directly specified")
-                    kwargs = KwargsType(required=False,
-                                        metavar='Help message only. Do NOT attempt to specify, or an exception will be raised.',
-                                        type=ShouldNotSpecify(arg_name),
-                                        help=f"""This is a placeholder for the nested argument '{arg_name}'.
-                                             Its parent is {'' if parent_required else 'not'} required.
-                                             {"It's required" if default is DefaultMarker else f"Not required with default: {default}"},
-                                             if the parent is being parsed.""")
-                    # if default is not NO_DEFAULT:
-                    #     kwargs['default'] = default
-                    self._parser.add_argument(f'--{arg_name}', **vars(kwargs))
-                    self.handler_actions[arg_name] = None, default
-                else:
-                    # fallback to special handling for the types which can not be fully enumerated, e.g. tuple
-                    handler = self.handlers.get(arg_type) or self.fallback_handlers.get(get_origin(arg_type))  # type: ignore
-                    if not handler:
-                        raise SmartArgError(f"Unsupported type: {arg_type} for '{arg_name}'")
-                    field_meta = FieldMeta(comment=comments.get(raw_arg_name, ''), default=default, type=arg_type)
-                    kwargs = handler.gen_kwargs(field_meta)
-                    # apply user overwrite to the argument object
-                    kwargs.__dict__.update(**vars(arg_class).get(f'_{raw_arg_name}', {}))
-                    if hasattr(kwargs, 'choices'):
-                        logger.info(f"'{arg_name}': 'choices' {kwargs.choices} specified, removing 'metavar'.")
-                        del kwargs.metavar  # 'metavar' would override 'choices' which makes the help message less helpful
-                    if not parent_required and hasattr(kwargs, 'required'):
-                        del kwargs.required
-                    kwargs.default = DefaultMarker  # Marker for fields absent from parsing
-                    self.handler_actions[arg_name] = handler, self._parser.add_argument(f'--{arg_name}', **vars(kwargs))
+                            def __call__(self, _):
+                                raise SmartArgError(f"Nested argument '{self.name}' can not be directly specified")
+                        kwargs = KwargsType(required=False,
+                                            metavar='Help message only. Do NOT attempt to specify, or an exception will be raised.',
+                                            type=ShouldNotSpecify(arg_name),
+                                            help=f"""This is a placeholder for the nested argument '{arg_name}'.
+                                                 Its parent is {'' if parent_required else 'not'} required.
+                                                 {"It's required" if default is DefaultMarker else f"Not required with default: {default}"},
+                                                 if the parent is being parsed.""")
+                        # if default is not NO_DEFAULT:
+                        #     kwargs['default'] = default
+                        self._parser.add_argument(f'--{arg_name}', **vars(kwargs))
+                        self.handler_actions[arg_name] = None, default
+                    else:
+                        # fallback to special handling for the types which can not be fully enumerated, e.g. tuple
+                        handler = self.handlers.get(arg_type) or self.fallback_handlers.get(get_origin(arg_type))  # type: ignore
+                        if not handler:
+                            raise SmartArgError(f"Unsupported type: {arg_type} with origin {get_origin(arg_type)} for '{arg_name}'")
+                        field_meta = FieldMeta(comment=comments.get(raw_arg_name, ''), default=default, type=arg_type)
+                        kwargs = handler.gen_kwargs(field_meta)
+                        # apply user overwrite to the argument object
+                        kwargs.__dict__.update(**vars(arg_class).get(f'_{raw_arg_name}', {}))
+                        if hasattr(kwargs, 'choices'):
+                            logger.info(f"'{arg_name}': 'choices' {kwargs.choices} specified, removing 'metavar'.")
+                            del kwargs.metavar  # 'metavar' would override 'choices' which makes the help message less helpful
+                        if not parent_required and hasattr(kwargs, 'required'):
+                            del kwargs.required
+                        kwargs.default = DefaultMarker  # Marker for fields absent from parsing
+                        self.handler_actions[arg_name] = handler, self._parser.add_argument(f'--{arg_name}', **vars(kwargs))
+                except BaseException as b_e:
+                    logger.fatal(f"Failed creating argument parser for {arg_name} with exception {b_e}.")
+                    raise b_e
 
     def parse_to_arg(self, argv: Sequence[str], *, error_on_unknown: bool = True) -> ArgType:
         """

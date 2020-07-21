@@ -213,14 +213,15 @@ def test_cli_execution():
     args = '--nn 200 300 --a_tuple s 5 --encoder fastText --h_param y:1 n:0 --nested.n_nested.n_' \
            'name "nested name" --n None --embedding_dim 100 --lr 0.001'
     arg_line = demo + ' ' + args
-    completed_process = subprocess.run(arg_line, shell=True, capture_output=True)
+    kwargs = {'stdout': subprocess.PIPE, 'stderr': subprocess.PIPE, 'shell': True}
+    completed_process = subprocess.run(arg_line, **kwargs)
     assert completed_process.returncode == 0
 
-    completed_process = subprocess.run(arg_line + ' --adp False', shell=True, capture_output=True)
+    completed_process = subprocess.run(arg_line + ' --adp False', **kwargs)
     assert completed_process.returncode == 168
 
-    completed_process = subprocess.run(arg_line + ' --nested "OH NO!"', shell=True, capture_output=True)
+    completed_process = subprocess.run(arg_line + ' --nested "OH NO!"', **kwargs)
     assert completed_process.returncode == 1
 
-    completed_process = subprocess.run(f'{demo} MyTup+ {args} MyTup- --nested "OH NO!"', shell=True, capture_output=True)
+    completed_process = subprocess.run(f'{demo} MyTup+ {args} MyTup- --nested "OH NO!"', **kwargs)
     assert completed_process.returncode == 0
