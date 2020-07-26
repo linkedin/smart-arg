@@ -1,13 +1,17 @@
-Welcome to smart-arg-suite's documentation!
+Welcome to ``smart-arg``'s documentation!
 ============================================
-
-.. automodule:: linkedin.smart_arg
-   :members:
-
 Contents:
 
 .. toctree::
    :maxdepth: 2
+   :glob:
+
+   README
+   advanced
+   api
+   CONTRIBUTING
+   LICENSE
+
 
 Indices and tables
 ==================

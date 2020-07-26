@@ -6,6 +6,7 @@ import datetime
 extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.intersphinx',
+    'recommonmark',
 ]
 
 # Add any paths that contain templates here, relative to this directory.

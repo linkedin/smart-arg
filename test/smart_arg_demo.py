@@ -37,14 +37,14 @@ class MyTup(NamedTuple):
             print(f)
         assert self.n
 
-    def __post_process__(self) -> 'MyTup':
+    def __late_init__(self) -> 'MyTup':
         processed = self
         if processed.n is None:
             processed = processed._replace(n=processed.nn[0])
         return processed
 
 
-expected_arg = MyTup(nn=[200, 300], encoder="fastText", a_tuple=("s", 5), h_param={"y": 1, "n": 0}, nested=NestedArg()).__post_process__()
+expected_arg = MyTup(nn=[200, 300], encoder="fastText", a_tuple=("s", 5), h_param={"y": 1, "n": 0}, nested=NestedArg()).__late_init__()
 parsed = MyTup(sys.argv[1:])
 if parsed == expected_arg:
     print(f"Matched: '{parsed}'")

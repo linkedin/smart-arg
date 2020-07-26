@@ -51,11 +51,11 @@ def test_basic_parse_to_arg():
               '--d_tuple_3 10 0.5 False --d_tuple_2 tuple 12 --e_dict_str_int size:32 area:90 --e_dict_int_bool 10:True 20:False 30:True --with_default 10'
     parsed_arg = MyTupBasic(arg_cmd.split())
     assert parsed_arg == my_tup_basic
-    parsed_arg_from_factory: MyTupBasic = MyTupBasic.from_argv(arg_cmd.split())
+    parsed_arg_from_factory: MyTupBasic = MyTupBasic.__from_argv__(arg_cmd.split())
     assert parsed_arg == parsed_arg_from_factory
-    serialized_cmd_line = my_tup_basic.to_argv()
+    serialized_cmd_line = my_tup_basic.__to_argv__()
     assert set(serialized_cmd_line) == set(arg_cmd.split())
-    my_parser = MyTupBasic.arg_suite._parser
+    my_parser = MyTupBasic.__arg_suite__._parser
     assert my_parser._option_string_actions['--a_int'].help == '(int, required)  a is int'
     assert my_parser._option_string_actions['--a_float'].help == '(float, required)  a is float'
     assert my_parser._option_string_actions['--a_str'].choices == ['hello', 'bonjour', 'hola']
@@ -73,21 +73,22 @@ def test_parse_error():
 def test_post_process():
     @arg_suite
     class MyTup(NamedTuple):
-        a_int: int = LateInit  # if a_int is not in the argument, post_process will initialize it
+        a_int: Optional[int] = LateInit  # if a_int is not in the argument, post_process will initialize it
 
+    pytest.raises(SmartArgError, MyTup)
+    pytest.raises(SmartArgError, MyTup, a_int='not a int')
     pytest.raises(SmartArgError, MyTup, [])
-    MyTup.__post_process__ = lambda s: None
+    MyTup.__late_init__ = lambda s: None
     pytest.raises(SmartArgError, MyTup, [])
 
     def post_process(self):
-        if self.a_int is LateInit:
-            return self._replace(a_int=10)
+        return self._replace(a_int=10) if self.a_int is LateInit else self
 
-    MyTup.__post_process__ = post_process
-    arg = MyTup([])
-    assert arg.a_int == 10
+    MyTup.__late_init__ = post_process
+    assert MyTup([]).a_int == 10
+    assert MyTup().a_int == 10
     assert MyTup(a_int=0).a_int == 0
-    del MyTup.__post_process__
+    del MyTup.__late_init__
     assert MyTup(a_int=0).a_int == 0
 
 
@@ -155,10 +156,10 @@ def test_argv():
         d_tuple_2=('hello', 2),
         e_dict_str_int={'size': 32, 'area': 90}
     )
-    cmd_line = expected_arg.to_argv()
+    cmd_line = expected_arg.__to_argv__()
     with unittest.mock.patch('sys.argv', ['mock'] + cmd_line):
         parsed = main(sys.argv[1:])
-        parsed_factory = MockArgTup.from_argv()
+        parsed_factory = MockArgTup.__from_argv__()
 
         assert parsed == parsed_factory
         assert parsed == expected_arg
@@ -184,7 +185,7 @@ def test_primitive_addon():
 
     tup = MyTuple(['--a_int', '3'])
     assert tup.a_int == 9
-    my_parser = MyTuple.arg_suite._parser
+    my_parser = MyTuple.__arg_suite__._parser
     assert my_parser._option_string_actions['--a_int'].help == '(int, squared)'
 
 
@@ -196,17 +197,30 @@ def test_unsupported_types():
 
 def test_nested():
     @arg_suite
+    class MyTup(NamedTuple):
+        def __late_init__(self):
+            return self._replace(b_int=10) if self.b_int is LateInit else self
+        b_int: int = LateInit  # if a_int is not in the argument, __late_init__ will initialize it
+
+    @arg_suite
     class Nested(NamedTuple):
         a_int: int
         nested: MyTupBasic = my_tup_basic  # nested
         another_int: int = 0
+        another_nested: MyTup = MyTup()
 
-    # Nested.arg_suite._parser.print_help()
     nested = Nested(a_int=0)
-    argv = nested.to_argv()
+    assert nested.another_nested.b_int == 10
+    argv = nested.__to_argv__()
     assert Nested(argv) == nested
     assert Nested(argv[0:2]) == nested
     pytest.raises(SmartArgError, Nested, ['--a_int', '0', '--nested', 'raise'])
+
+    class NotDecoratedWithPost(NamedTuple):
+        def __validate__(self): pass
+
+    pytest.raises(SmartArgError, arg_suite, NamedTuple('Nested', nested=NotDecoratedWithPost))
+    arg_suite(NamedTuple('Nested', nested=NamedTuple('NotDecorated')))  # should not raise
 
 
 def test_cli_execution():
