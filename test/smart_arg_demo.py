@@ -44,12 +44,13 @@ class MyTup(NamedTuple):
         return processed
 
 
-expected_arg = MyTup(nn=[200, 300], encoder="fastText", a_tuple=("s", 5), h_param={"y": 1, "n": 0}, nested=NestedArg()).__late_init__()
+expected_arg = MyTup(nn=[200, 300], encoder="fastText", a_tuple=("s", 5), h_param={"y": 1, "n": 0}, nested=NestedArg())
 parsed = MyTup(sys.argv[1:])
 if parsed == expected_arg:
     print(f"Matched: '{parsed}'")
 else:
-    print(f"Error(168!"
+    err_code = 168
+    print(f"Error({err_code})"
           f"Expected: {expected_arg}\n"
           f"Parsed: {parsed}")
-    exit(168)
+    exit(err_code)

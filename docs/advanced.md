@@ -53,12 +53,12 @@ class MyArg(NamedTuple):
 
 By default, `smart-arg` supports the following types as fields of a `NamedClass` argument class:
 * primitives: `int`, `float`, `bool`, `str`
-* `Optional`: `Optional[int]`, `Optional[float]`, `Optional[bool]`, `Optional[str]`
 * `Tuple`: elements of the tuple are expected to be primitives
 * `List`/`Set`: `List[int]`, `List[float]`, `List[bool]`, `List[str]`, `Set[int]`, `Set[float]`, `Set[bool]`, `Set[str]`
 * `Dict`: `Dict[int, int]`, `Dict[int, float]`, `Dict[int, bool]`, `Dict[int, str]`, `Dict[float, int]`, `Dict[float, float]`, 
 `Dict[float, bool]`, `Dict[float, str]`, `Dict[bool, int]`, `Dict[bool, float]`, `Dict[bool, bool]`, `Dict[bool, str]`, 
 `Dict[str, int]`, `Dict[str, float]`, `Dict[str, bool]`, `Dict[str, str]`
+* `Optional[AnyOtherSupportedType]`: Beware that any optional field is required to **default to `None`**.
 
 ### override argument fields
 A user can change the parsing behavior of certain field of an argument class.

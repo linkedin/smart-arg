@@ -13,9 +13,8 @@ class MockArgTup(NamedTuple):
 
 def main(args: Sequence[str]):
     parsed_tup = MockArgTup(args)
-    parsed_factory = MockArgTup.__from_argv__()
-
-    assert parsed_tup == parsed_factory
+    assert parsed_tup == MockArgTup(None)
+    assert parsed_tup == MockArgTup.__from_argv__()
     return parsed_tup
 
 

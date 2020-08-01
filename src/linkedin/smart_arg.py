@@ -253,28 +253,15 @@ class TupleHandler(TypeHandler):
     handled_original_types = (tuple,)
 
 
-class OptionalHandler(TypeHandler):
-    def _build_other(self, kwargs: KwargsType, arg_type: Type) -> None:
-        """Build other information for the keyword argument KwargsType object
-
-        :param kwargs: the keyword argument KwargsType object
-        :param arg_type: the type of the argument extracted from NamedTuple (Optional type)"""
-        super()._build_other(kwargs, arg_type)
-        self.arg_types: Tuple[Type, ...] = get_args(arg_type)  # type: ignore
-        # get element type
-        self.unboxed_type = self.arg_types[0]
-        kwargs.metavar = self.type_to_str(self.unboxed_type)
-        kwargs.type = lambda s: None if s == 'None' else self.unboxed_type(s)
-    handled_types = {Optional[p] for p in PRIMITIVES}  # type: ignore
-
-
-class CollectionHandler(OptionalHandler):
+class CollectionHandler(TypeHandler):
     def _build_other(self, kwargs: KwargsType, arg_type: Type) -> None:
         """Build other information for the keyword argument KwargsType object
 
         :param kwargs: the keyword argument KwargsType object
         :param arg_type: the type of the argument extracted from NamedTuple (List/Set type)"""
-        super()._build_other(kwargs, arg_type)
+        self.arg_types: Tuple[Type, ...] = get_args(arg_type)  # type: ignore
+        self.unboxed_type = self.arg_types[0]
+        kwargs.metavar = self.type_to_str(self.unboxed_type)
         kwargs.nargs = '*'  # Consider using comment to specify the number of size of the collection
         kwargs.type = self.unboxed_type
     handled_types = {Box[p] for Box in [List, Set] for p in PRIMITIVES}  # type: ignore
@@ -315,7 +302,8 @@ class ArgSuite(Generic[ArgType]):
 
         :param arg_class: Decorated class
         :param args: Optional positional argument, to be parsed to the arg_class type.
-               `args[0]`: a optional marker to mark the sub-sequence of `argv` to be parsed by the parser. ``None`` will be interpreted as ``sys.argv[1:]``
+               `args[0]`: a optional marker to mark the sub-sequence of `argv` to be parsed by the parser. ``None`` will
+                be interpreted as ``sys.argv[1:]``
                `args[1]`: default to `None`, indicating using the default separator for the argument class
 
         :type `(Optional[Sequence[str]], Optional[str])`
@@ -323,13 +311,13 @@ class ArgSuite(Generic[ArgType]):
         logger.info(f"Patched new for {arg_class} is called with {args} and {kwargs}.")
         if args:
             # TODO Exception handling with helpful error message
-            if (len(args) > 2 or not isinstance(args[0], Sequence) or any(a.__class__ is not str for a in args[0])
-                    or len(args) == 2 and args[1].__class__ not in (NoneType, str)):
-                raise SmartArgError(f"Calling '{arg_class}({args}, {kwargs})' is not allowed:\n"
-                                    f"Only accept positional arguments to parse to the NamedTuple '{arg_class}', but got '{args}'\n"
-                                    f"Use keyword arguments only to create NamedTuple object directly, got '{kwargs}'.")
-            assert arg_class is self._arg_class, (f"{arg_class}: Only the patched root argument class {self._arg_class} "
-                                                  f"allows using positional arguments for parsing.")
+            if (kwargs or len(args) > 2 or len(args) == 2 and args[1].__class__ not in (NoneType, str)
+                    or not (args[0] is None or isinstance(args[0], Sequence) and all(a.__class__ is str for a in args[0]))):
+                raise SmartArgError(f"Calling '{arg_class}(positional {args}, keyword {kwargs})' is not allowed:\n"
+                                    f"Only accept positional arguments to parse to the NamedTuple '{arg_class}'\n"
+                                    f"keyword arguments can only be used to create NamedTuple object directly.")
+            assert arg_class is self._arg_class, (f"{arg_class}: Only the patched root argument class {self._arg_class}"
+                                                  f" allows using positional arguments for parsing.")
             return self.parse_to_arg(*args)
         else:
             try:
@@ -354,7 +342,7 @@ class ArgSuite(Generic[ArgType]):
         addons = [PrimitiveHandlerAddon]
         if primitive_handler_addons:
             addons += primitive_handler_addons
-        handler_types = [TypeHandler, OptionalHandler, CollectionHandler, DictHandler, TupleHandler]
+        handler_types = [TypeHandler, CollectionHandler, DictHandler, TupleHandler]
         if type_handlers:
             handler_types += type_handlers
 
@@ -375,7 +363,7 @@ class ArgSuite(Generic[ArgType]):
         arg_class.__original_new__, arg_class.__new__ = arg_class.__new__, self.new_arg
         # Commented for now since it seems that _replace won't call __new__
         # arg_class.__original_replace__, arg_class._replace = arg_class._replace, lambda s, **kwargs: self.replace(s, **kwargs)  # instance level method
-        arg_class.__to_argv__ = lambda s: self.to_cmd_argv(s)  # instance level method
+        arg_class.__to_argv__ = lambda s, separator='': self.to_cmd_argv(s, separator)  # instance level method
         arg_class.__from_argv__ = self.parse_to_arg
         arg_class.__arg_suite__ = self
         self._arg_class = arg_class
@@ -394,7 +382,7 @@ class ArgSuite(Generic[ArgType]):
             if self.is_arg_type(t):
                 self._validate_fields(t)
         # empty namedtuple to extract all the fields.
-        EmptyTup = NamedTuple('EmptyTup')  # type: ignore
+        class EmptyTup(NamedTuple): pass  # noqa: E701
         # note: NamedTuple fields without type won't be regarded as a property/entry _fields.
         arg_fields = arg_class._fields
         invalidate_fields = list(filter(lambda s: s.endswith('_'), arg_fields))
@@ -456,12 +444,18 @@ class ArgSuite(Generic[ArgType]):
                         self.handler_actions[arg_name] = None, default
                     else:
                         # fallback to special handling for the types which can not be fully enumerated, e.g. tuple
+                        type_origin = get_origin(arg_type)
+                        type_args: tuple = get_args(arg_type)  # type: ignore
+                        if type_origin == Union and len(type_args) == 2 and type_args[1] == NoneType:
+                            arg_type = type_args[0]
+                            if default not in (None, LateInit):
+                                raise SmartArgError(f"Optional field: {arg_name} must default to None, but got {default}")
                         handler = self.handlers.get(arg_type) or self.fallback_handlers.get(get_origin(arg_type))  # type: ignore
                         if not handler:
-                            raise SmartArgError(f"Unsupported type: {arg_type} with origin {get_origin(arg_type)} for '{arg_name}'")
+                            raise SmartArgError(f"Unsupported type: Optional/{arg_type} with origin {type_origin} for '{arg_name}'")
                         field_meta = FieldMeta(comment=comments.get(raw_arg_name, ''), default=default, type=arg_type)
                         kwargs = handler.gen_kwargs(field_meta)
-                        # apply user overwrite to the argument object
+                        # apply user override to the argument object
                         kwargs.__dict__.update(**vars(arg_class).get(f'_{raw_arg_name}', {}))
                         if hasattr(kwargs, 'choices'):
                             logger.info(f"'{arg_name}': 'choices' {kwargs.choices} specified, removing 'metavar'.")
@@ -481,21 +475,18 @@ class ArgSuite(Generic[ArgType]):
         :return: Stripped `argv`"""
         if argv is None:
             argv = sys.argv[1:]
-        l_s = separator + '+'
-        r_s = separator + '-'
-        lc = argv.count(l_s)
-        rc = argv.count(r_s)
+        l_s, r_s = separator + '+', separator + '-'
+        lc, rc = argv.count(l_s), argv.count(r_s)
         if lc == rc:
             if lc == 0:
                 return argv
             elif lc == 1:
-                b = argv.index(l_s)
-                e = argv.index(r_s)
+                b, e = argv.index(l_s), argv.index(r_s)
                 if e > b:
                     return argv[b + 1: e]
         raise SmartArgError(f"Expecting up to 1 pair of separator '{l_s}' and '{r_s}' in {argv}")
 
-    def parse_to_arg(self, argv: Optional[Sequence[str]] = None, separator: Optional[str] = None, *, error_on_unknown: bool = True) -> ArgType:
+    def parse_to_arg(self, argv: Optional[Sequence[str]] = None, separator: Optional[str] = '', *, error_on_unknown: bool = True) -> ArgType:
         """Parse the command line to decorated ArgType
 
         :param separator: Optional marker to mark the sub-sequence of `argv` ['{separator}+' to '{separator}-'] to parse
@@ -516,8 +507,11 @@ class ArgSuite(Generic[ArgType]):
                 arg_type_flag, default = self.handler_actions[arg_name]
                 if arg_type_flag:
                     value = arg_dict.get(arg_name, DefaultMarker)
-                    # ns reading variable length arguments are all lists, need to apply the origin type for the conversion to correct type.
-                    value = get_origin(arg_class._field_types[raw_arg_name])(value) if isinstance(value, List) else value  # type: ignore
+                    type_origin = get_origin(arg_type)
+                    type_args: tuple = get_args(arg_type)  # type: ignore
+                    type_to_new = get_origin(type_args[0]) if type_origin == Union and len(type_args) == 2 and type_args[1] == NoneType else type_origin
+                    # argparse reading variable length arguments are all lists, need to apply the origin type for the conversion to correct type.
+                    value = type_to_new(value) if value is not None and isinstance(value, List) else value  # type: ignore
                 else:
                     is_nested = any((name for name in arg_dict.keys() if name.startswith(arg_name)))
                     value = to_arg(arg_type, f'{arg_name}.') if is_nested else default  # type: ignore
@@ -556,15 +550,17 @@ class ArgSuite(Generic[ArgType]):
                 logger.warning(f"Unable to check if {attr} is of type {t} for field {f} of argument class {arg_class}")
                 conforming = True
             if not conforming:
-                raise SmartArgError(f"Field '{f}' has value of '{attr}' which is not of the expected type '{t}' for {arg_class}")
+                raise SmartArgError(f"Field {f} has value of {attr} of type {attr.__class__} which is not of the expected type '{t}' for {arg_class}")
 
         call_if_defined(parse_arg, '__validate__')
         return parse_arg
 
     def _gen_cmd_argv(self, args: ArgType, prefix) -> Iterable[str]:
         for name, arg in args._asdict().items():
-            handler, action = self.handler_actions[f'{prefix}{name}']
-            yield from handler.gen_cli_arg(action, arg) if handler else self._gen_cmd_argv(arg, f'{prefix}{name}.')
+            default = args.__class__._field_defaults.get(name, DefaultMarker)
+            if arg != default:
+                handler, action = self.handler_actions[f'{prefix}{name}']
+                yield from handler.gen_cli_arg(action, arg) if handler else self._gen_cmd_argv(arg, f'{prefix}{name}.')
 
     @staticmethod
     def get_comments(arg_cls: Type[ArgType]) -> Dict[str, str]:
@@ -603,12 +599,16 @@ class ArgSuite(Generic[ArgType]):
             last_token = token
         return comments
 
-    def to_cmd_argv(self, args: ArgType) -> Sequence[str]:
+    def to_cmd_argv(self, arg: ArgType, separator: Optional[str] = '') -> Sequence[str]:
         """Generate the command line arguments
 
-        :param args: the annotated argument class object
+        :param separator: separator marker, empty str to disable, None to default to class name
+        :param arg: the annotated argument class object
         :return: command line sequence"""
-        return list(self._gen_cmd_argv(args, ''))
+        argv = self._gen_cmd_argv(arg, '')
+        if separator is None:
+            separator = self._arg_class.__name__
+        return [separator + '+', *argv, separator + '-'] if separator else list(argv)
 
 
 def custom_arg_suite(type_handlers: List[Type[TypeHandler]] = None, primitive_handler_addons: List[Type[PrimitiveHandlerAddon]] = None):
