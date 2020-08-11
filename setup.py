@@ -10,7 +10,7 @@ doc = 'https://smarg-arg.readthedocs.io'
 
 setup(
     name='smart-arg',
-    version='0.0.6',
+    version='0.0.9',
     author='',
     author_email='',
     description=__doc__,
