@@ -1,20 +1,17 @@
 """Argument class <=> Human friendly cli"""
 
-from setuptools import find_namespace_packages, setup
+from setuptools import setup
 
 with open('README.md', encoding='utf-8') as f:
     readme = f.read()
 
 # TODO uncomment `doc` usages once set up.
-doc = 'https://smarg-arg.readthedocs.io'
+doc = 'https://smart-arg.readthedocs.io'
 
 setup(
     name='smart-arg',
-    version='0.0.9',
-    author='',
-    author_email='',
+    version='0.1.2',
     description=__doc__,
-    package_dir={'': 'src'},
     long_description=readme,
     long_description_content_type='text/markdown',
     license='BSD-2-CLAUSE',
@@ -26,8 +23,7 @@ setup(
         'Source': 'https://github.com/linkedin/smart-arg.git',
         'Tracker': 'https://github.com/linkedin/smart-arg/issues',
     },
-    packages=find_namespace_packages(where='src'),
-    include_package_data=True,
+    py_modules=['smart_arg'],
     install_requires=[],
     tests_require=['pytest-flake8'],
     classifiers=[

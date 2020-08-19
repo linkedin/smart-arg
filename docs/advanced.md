@@ -1,13 +1,16 @@
 ## More Features
-### Post processing
+### Post processing & validation
 
 A user can define a method in the argument class to do post processing after the argument is created.
 For example, when a field's default value depends on some other input fields, one could use a default
-placeholder `LateInit`, and a `__late_init__` function to define the actual value:
+placeholder `LateInit`, and a `__post_init__` function to define the actual value. 
+
+The `__post_init__` function can also be used to validate the argument after instantiation:
+:
 ```python
 from typing import NamedTuple
 
-from linkedin.smart_arg import arg_suite, LateInit
+from smart_arg import arg_suite, LateInit
 
 
 @arg_suite
@@ -16,42 +19,39 @@ class MyArg(NamedTuple):
     _network = {'choices': ['cnn', 'mlp']}
     num_layers: int = LateInit
 
-    def __late_init__(self) -> 'MyArg':
+    def __post_init__(self) -> 'MyArg':
+        assert self.network in self._network['choices'], f'Invalid network {self.network}'
         if self.num_layers is LateInit:
             if self.network == 'cnn':
                 num_layers = 3
             elif self.network == 'mlp':
                 num_layers = 5
-            else:
-                raise AssertionError('Not reachable')
-            return self._replace(num_layers=num_layers)
-        else:
-            return self
+            self.num_layers=num_layers
+        else: 
+            assert self.num_layers >= 0, f"number_layers: {self.num_layers} can not be negative"
+
 ```
-Note that if any fields are assigned a default placeholder `LateInit`, a `__late_init__` is expected
-to be defined, replace any `LateInit` with actual values and return an argument(`NamedTuple`) instance, 
-or it will raise a `SmartArgError`.
+Notes:
+* If any fields are assigned a default placeholder `LateInit`, a `__post_init__` is expected
+to be defined, replace any `LateInit` with actual values, or it will fail the internal validation and trigger a `SmartArgError`.
+* Field mutations are only allowed in the `__post_init__` as part of the class instance construction. No mutations are
+allowed after construction, including manually calling `__post_init__`.
+* `__post_init__` of a `NamedTuple` works similar to 
 
-### Validation
-
-An optional `__validate__` function can be defined to validate the argument after instantiation or `__late_init__`:
-```python
-from typing import NamedTuple
-
-from linkedin.smart_arg import arg_suite
-
-
-@arg_suite
-class MyArg(NamedTuple):
-    num_layers: int
-    
-    def __validate__(self):
-        assert self.num_layers >= 0, f"number_layers: {self.num_layers} can not be negative"
-```
-
+## Supported Argument Classes
+### [`NameTuple`](https://docs.python.org/3.7/library/typing.html?highlight=namedtuple#typing.NamedTuple)
+* Strong immutability
+* Part of the Python distribution  
+* No inheritance
+ 
+### [`dataclass`](https://docs.python.org/3.7/library/dataclasses.html)
+* Weak immutability with native `@dataclass(frozen=True)` or `smart-arg` patched (when not `frozen`) 
+* `pip install dataclasses` is needed for Python 3.6
+* Inheritance support
+* Native `__post_init__` support
 ## Advanced Usages
 
-By default, `smart-arg` supports the following types as fields of a `NamedClass` argument class:
+By default, `smart-arg` supports the following types as fields of an argument class:
 * primitives: `int`, `float`, `bool`, `str`
 * `Tuple`: elements of the tuple are expected to be primitives
 * `List`/`Set`: `List[int]`, `List[float]`, `List[bool]`, `List[str]`, `Set[int]`, `Set[float]`, `Set[bool]`, `Set[str]`
@@ -65,7 +65,7 @@ A user can change the parsing behavior of certain field of an argument class.
 One can only do this when the field's type is already supported by `smart-arg`.  
 
 
-This is done by defining a companion field starts with "``_``" to overwrite the keyed arguments
+This is done by defining a private companion field starts with "``__``" (double underscores) to overwrite the keyed arguments
 to [ArgumentParser.add_argument](https://docs.python.org/3/library/argparse.html#the-add-argument-method) with a dictionary.
 
 <font color='red'>ALERT:</font> this can lead to **inconsistent behaviors** when one also generates the command-line
@@ -74,13 +74,13 @@ behavior from the command-line representation.
 ```python
 from typing import NamedTuple, List
 
-from linkedin.smart_arg import arg_suite
+from smart_arg import arg_suite
 
 
 @arg_suite
 class MyTup(NamedTuple):
     a_list: List[int]
-    _a_list = {'choices': [200, 300], 'nargs': '+'}
+    __a_list = {'choices': [200, 300], 'nargs': '+'}
 ```
 
 ### override or extend the support of primitive and other types
@@ -93,7 +93,7 @@ other than primitive ones such as `List`, `Set`, `Dict`, `Tuple`, etc.
 ```python
 from typing import NamedTuple
 
-from linkedin.smart_arg import PrimitiveHandlerAddon, TypeHandler, custom_arg_suite
+from smart_arg import PrimitiveHandlerAddon, TypeHandler, custom_arg_suite
 
 
 # overwrite int primitive type handling by squaring it

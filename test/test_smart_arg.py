@@ -2,16 +2,20 @@
 import os
 import subprocess
 import sys
+from dataclasses import dataclass, FrozenInstanceError
+from types import SimpleNamespace
 from typing import List, NamedTuple, Tuple, Optional, Dict, Set
+from contextlib import redirect_stderr
 
 import pytest
 
-from linkedin.smart_arg import arg_suite, custom_arg_suite, LateInit, SmartArgError, TypeHandler, PrimitiveHandlerAddon
+from smart_arg import arg_suite, custom_arg_suite, LateInit, SmartArgError, TypeHandler, PrimitiveHandlerAddon
 from smart_arg_mock import main, MockArgTup
 
 
 @arg_suite
-class MyTupBasic(NamedTuple):
+@dataclass(frozen=True)
+class MyTupBasic:
     """
     MyTup docstring goes to description
     """
@@ -19,7 +23,7 @@ class MyTupBasic(NamedTuple):
     a_float: float  # a is float
     a_bool: bool
     a_str: str
-    _a_str = {'choices': ['hello', 'bonjour', 'hola']}  # will overwrite the a_str argument choices
+    __a_str = {'choices': ['hello', 'bonjour', 'hola']}  # will overwrite the a_str argument choices
     b_list_int: List[int]
     b_set_str: Set[str]
     d_tuple_3: Tuple[int, float, bool]
@@ -45,14 +49,12 @@ my_tup_basic = MyTupBasic(
 
 
 def test_basic_parse_to_arg():
-    with pytest.raises(TypeError, match="missing 10 required keyword arguments"):
+    with pytest.raises(TypeError, match="missing 10"):
         MyTupBasic()
     arg_cmd = 'MyTupBasic+ --a_int 32 --a_float 0.3 --a_bool True --a_str hello --b_list_int 1 2 3 --b_set_str set1 set2 ' + \
               '--d_tuple_3 10 0.5 False --d_tuple_2 tuple 12 --e_dict_str_int size:32 area:90 --e_dict_int_bool 10:True 20:False 30:True MyTupBasic-'
-    parsed_arg = MyTupBasic(arg_cmd.split())
-    assert parsed_arg == my_tup_basic
     parsed_arg_from_factory: MyTupBasic = MyTupBasic.__from_argv__(arg_cmd.split())
-    assert parsed_arg == parsed_arg_from_factory
+    assert my_tup_basic == parsed_arg_from_factory
     serialized_cmd_line = my_tup_basic.__to_argv__(separator=None)
     assert set(serialized_cmd_line) == set(arg_cmd.split())
     my_parser = MyTupBasic.__arg_suite__._parser
@@ -61,17 +63,17 @@ def test_basic_parse_to_arg():
     assert my_parser._option_string_actions['--a_str'].choices == ['hello', 'bonjour', 'hola']
 
 
-class Muted:
-    def write(self, *_):
-        pass
+    # parsed_arg = MyTupBasic(arg_cmd.split())
+    # assert parsed_arg == my_tup_basic
+#
+# test_basic_parse_to_arg()
 
 
-from contextlib import redirect_stderr
+muted = redirect_stderr(SimpleNamespace(write=lambda *_: None))
 
 
 def test_parse_error():
-    with redirect_stderr(Muted()):
-        pytest.raises(SystemExit, MyTupBasic, [])
+    with muted: pytest.raises(SystemExit, MyTupBasic.__from_argv__, [])
 
 
 def test_optional():
@@ -79,11 +81,10 @@ def test_optional():
     class MyTup(NamedTuple):
         ints: Optional[List[int]] = None
 
-    with redirect_stderr(Muted()):
-        pytest.raises(SystemExit, MyTup, ['--ints', 'None'])
-    # assert MyTup(['--ints', 'None']).ints is None
-    assert MyTup(['--ints', '1', '2']).ints == [1, 2]
-    assert MyTup(['--ints']).ints == []
+    with muted: pytest.raises(SystemExit, MyTup.__from_argv__, ['--ints', 'None'])
+    assert MyTup.__from_argv__([]).ints is None
+    assert MyTup.__from_argv__(['--ints', '1', '2']).ints == [1, 2]
+    assert MyTup.__from_argv__(['--ints']).ints == []
 
     class InvalidOptional(NamedTuple):
         no: Optional[int]
@@ -98,18 +99,17 @@ def test_post_process():
 
     pytest.raises(SmartArgError, MyTup)
     pytest.raises(SmartArgError, MyTup, a_int='not a int')
-    pytest.raises(SmartArgError, MyTup, [])
-    MyTup.__late_init__ = lambda s: None
-    pytest.raises(SmartArgError, MyTup, [])
+    pytest.raises(SmartArgError, MyTup.__from_argv__, [])
 
-    def post_process(self):
-        return self._replace(a_int=10) if self.a_int is LateInit else self
+    @arg_suite
+    class MyTup(NamedTuple):
+        a_int: Optional[int] = LateInit  # if a_int is not in the argument, post_process will initialize it
 
-    MyTup.__late_init__ = post_process
-    assert MyTup([]).a_int == 10
+        def __post_init__(self):
+            self.a_int = 10 if self.a_int is LateInit else self.a_int
+
+    assert MyTup.__from_argv__([]).a_int == 10
     assert MyTup().a_int == 10
-    assert MyTup(a_int=0).a_int == 0
-    del MyTup.__late_init__
     assert MyTup(a_int=0).a_int == 0
 
 
@@ -125,17 +125,18 @@ def test_validate():
         validated = True
         raise AttributeError()
 
-    MyTup.__validate__ = validate
-    pytest.raises(AttributeError, MyTup, ['--a_int', '1'])
+    MyTup.__post_init__ = validate
+    pytest.raises(AttributeError, MyTup.__from_argv__, ['--a_int', '1'])
     assert validated, "`validate` might not be executed."
 
     @arg_suite
     class MyTuple(NamedTuple):
         abc: str
 
-        def __validate__(self):
+        def __post_init__(self):
             if self.abc != 'abc':
                 raise AttributeError()
+            return self
 
         @staticmethod
         def format():
@@ -145,16 +146,19 @@ def test_validate():
         def format2(cls):
             return "hello2"
 
+        format3 = lambda: "hello3"
+
     # no exception for callable methods
-    tup = MyTuple(['--abc', 'abc'])
+    tup = MyTuple.__from_argv__(['--abc', 'abc'])
     assert tup.abc == 'abc'
     assert tup.format() == 'hello'
     assert MyTuple.format2() == 'hello2'
+    assert MyTuple.format3() == 'hello3'
 
 
 def test_validate_fields():
     class DanglingParamOverride(NamedTuple):
-        _a_str = "abc"
+        __a_str = "abc"
 
     class MyNonType(NamedTuple):
         a_str = "abc"
@@ -207,7 +211,7 @@ def test_primitive_addon():
     class MyTuple(NamedTuple):
         a_int: int
 
-    tup = MyTuple(['--a_int', '3'])
+    tup = MyTuple.__from_argv__(['--a_int', '3'])
     assert tup.a_int == 9
     my_parser = MyTuple.__arg_suite__._parser
     assert my_parser._option_string_actions['--a_int'].help == '(int, squared)'
@@ -223,10 +227,10 @@ def test_unsupported_types():
 def test_nested():
     @arg_suite
     class MyTup(NamedTuple):
-        def __late_init__(self):
-            return self._replace(b_int=10) if self.b_int is LateInit else self
+        def __post_init__(self):
+            self.b_int = 10 if self.b_int is LateInit else self.b_int
 
-        b_int: int = LateInit  # if a_int is not in the argument, __late_init__ will initialize it
+        b_int: int = LateInit  # if a_int is not in the argument, __post_init__ will initialize it
 
     @arg_suite
     class Nested(NamedTuple):
@@ -243,13 +247,14 @@ def test_nested():
     pytest.raises(SmartArgError, Nested, ['--a_int', '0', '--nested', 'raise'])
 
     class NotDecoratedWithPost(NamedTuple):
-        def __validate__(self): pass
+        def __post_init__(self): pass
 
     class Nested(NamedTuple):
         nested: NotDecoratedWithPost
 
+    # Nested class is not allowed to have __post_init__ if not decorated
     pytest.raises(SmartArgError, arg_suite, Nested)
-    del NotDecoratedWithPost.__validate__
+    del NotDecoratedWithPost.__post_init__
     arg_suite(Nested)  # should not raise
 
 
@@ -270,3 +275,72 @@ def test_cli_execution():
 
     completed_process = subprocess.run(f'{demo} MyTup+ {args} MyTup- --nested "OH NO!"', **kwargs)
     assert completed_process.returncode == 0
+
+
+def test_dataclass():
+    @dataclass
+    class GdmixParams:
+        ACTIONS = ("action_inference", "action_train")
+        action: str = ACTIONS[1]  # Train or inference.
+        __action = {"choices": ACTIONS}
+        STAGES = ("fixed_effect", "random_effect")
+        stage: str = STAGES[0]  # Fixed or random effect.
+        __stage = {"choices": STAGES}
+        MODEL_TYPES = ("logistic_regression", "detext")
+        model_type: str = MODEL_TYPES[0]  # The model type to train, e.g, logistic regression, detext, etc.
+        __model_type = {"choices": MODEL_TYPES}
+
+        # Input / output files or directories
+        training_output_dir: Optional[str] = None  # Training output directory.
+        validation_output_dir: Optional[str] = None  # Validation output directory.
+
+        # Driver arguments for random effect training
+        partition_list_file: Optional[str] = None  # File containing a list of all the partition ids, for random effect only
+
+        def __post_init__(self):
+            assert self.action in self.ACTIONS, "Action must be either train or inference"
+            assert self.stage in self.STAGES, "Stage must be either fixed_effect or random_effect"
+            assert self.model_type in self.MODEL_TYPES, "Model type must be either logistic_regression or detext"
+
+    @dataclass
+    class SchemaParams:
+        # Schema names
+        sample_id: str  # Sample id column name in the input file.
+        sample_weight: Optional[str] = None  # Sample weight column name in the input file.
+        label: Optional[str] = None  # Label column name in the train/validation file.
+        prediction_score: Optional[str] = None  # Prediction score column name in the generated result file.
+        prediction_score_per_coordinate: str = "predictionScorePerCoordinate"  # ColumnName of the prediction score without the offset.
+
+    @arg_suite
+    @dataclass
+    class Params(GdmixParams, SchemaParams):
+        """GDMix Driver"""
+
+        def __post_init__(self):
+            super().__post_init__()
+            assert (self.action == self.ACTIONS[1] and self.label) or (self.action == self.ACTIONS[0] and self.prediction_score)
+            self.prediction_score = self.prediction_score
+
+    argv = ['--sample_id', 'uid', '--sample_weight', 'weight', '--feature_bags', 'global', '--train_data_path',
+            'resources/train', '--validation_data_path',
+            'resources/validate', '--model_output_dir', 'dummy_model_output_dir', '--metadata_file',
+            'resources/fe_lbfgs/metadata/tensor_metadata.json', '--feature_file',
+            'test/resources/fe_lbfgs/featureList/global']
+    with muted: pytest.raises(SystemExit, Params.__from_argv__, argv)
+    pytest.raises(AssertionError, Params.__from_argv__, argv, error_on_unknown=False)
+    args: Params = Params.__from_argv__(argv + ['--label', 'bluh'], error_on_unknown=False)
+    pytest.raises(AssertionError, Params, sample_id='uid', action='no_such_action')
+    pytest.raises(FrozenInstanceError, args.__post_init__)  # mutation not allowed after init
+    object.__delattr__(args, '__frozen__')
+    args.__post_init__()  # mutation allowed after '__frozen__` mark removed
+    assert args == Params(sample_id='uid',  sample_weight='weight', label='bluh')
+    assert args.__to_argv__() == ['--sample_id', 'uid', '--sample_weight', 'weight', '--label', 'bluh']
+
+    @arg_suite
+    @dataclass
+    class NoPostInit:
+        def mutate(self):
+            self.frozen = False
+        frozen: bool = True
+
+    pytest.raises(FrozenInstanceError, NoPostInit().mutate)  # mutation not allowed after init

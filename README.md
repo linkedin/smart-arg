@@ -1,8 +1,9 @@
 # Introduction to Smart Arguments Suite `(smart-arg`)
 
 Smart Arguments Suite (`smart-arg`) is a slim and handy Python library that help one work safely and conveniently 
-with the arguments that are represented by the immutable 
-[`NameTuple`](https://docs.python.org/3.7/library/typing.html?highlight=namedtuple#typing.NamedTuple),
+with the arguments that are represented by the immutable argument class 
+([`NameTuple`](https://docs.python.org/3.7/library/typing.html?highlight=namedtuple#typing.NamedTuple) or 
+[`dataclass`](https://docs.python.org/3.7/library/dataclasses.html)),
 and passed through command-line interfaces.
 
 `smart-arg` promotes arguments type-safety, enables IDEs' code autocompletion and type hints 
@@ -15,13 +16,13 @@ The `smarg-arg` package is available through `pip`.
 pip3 install smart-arg
 ```
 
-Users can define their argument -- a `NamedTuple` class with `smart-arg` decorator `@arg_suite` in their python scripts 
+Users can define their argument -- a `NamedTuple` or `dataclass` class with `smart-arg` decorator `@arg_suite` in their python scripts 
 and pass it through the command-ine interface.
 
 ```python
 import sys
 from typing import NamedTuple, List, Tuple, Dict, Optional
-from linkedin.smart_arg import arg_suite
+from smart_arg import arg_suite
 
 
 # Define the argument 
@@ -88,8 +89,10 @@ optional arguments:
 
 ```
 ## Promoted practices
-* Focus on defining the arguments diligently, and let the `smart-arg` (backed by [argparse.ArgumentParser](https://docs.python.org/3/library/argparse.html#argumentparser-objects)) work its magic around command-line interface. 
-* Always work directly with argument `NamedTuple` object when possible, even if you only need the command-line representation.
+* Focus on defining the arguments diligently, and let the `smart-arg` 
+  (backed by [argparse.ArgumentParser](https://docs.python.org/3/library/argparse.html#argumentparser-objects)) 
+  work its magic around command-line interface. 
+* Always work directly with argument class instances when possible, even if you only need the command-line representation.
 * Stick to the default behavior and the basic features, think twice before using any of the [advanced features](TODO-linked-to-readthedocs).
 
 

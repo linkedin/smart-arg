@@ -1,6 +1,6 @@
 import sys
 from typing import List, NamedTuple, Tuple, Dict, Sequence
-from linkedin.smart_arg import arg_suite
+from smart_arg import arg_suite
 
 
 @arg_suite
@@ -11,11 +11,8 @@ class MockArgTup(NamedTuple):
     e_dict_str_int: Dict[str, int]
 
 
-def main(args: Sequence[str]):
-    parsed_tup = MockArgTup(args)
-    assert parsed_tup == MockArgTup(None)
-    assert parsed_tup == MockArgTup.__from_argv__()
-    return parsed_tup
+def main(argv: Sequence[str]):
+    return MockArgTup.__from_argv__(argv)
 
 
 if __name__ == '__main__':

@@ -1,7 +1,7 @@
 import sys
 from typing import (List, NamedTuple, Tuple, Optional, Dict)
 
-from linkedin.smart_arg import arg_suite
+from smart_arg import arg_suite
 
 
 class NestedArg(NamedTuple):
@@ -21,7 +21,7 @@ class MyTup(NamedTuple):
     # nested_arg: NestedArg
 
     nn: List[int]  # Comments go to argparse help
-    _nn = {'choices': (200, 300)}
+    __nn = {'choices': (200, 300)}
     a_tuple: Tuple[str, int]
     encoder: str  # Text encoder type
     # empty_tuple: Tuple = 0
@@ -45,7 +45,7 @@ class MyTup(NamedTuple):
 
 
 expected_arg = MyTup(nn=[200, 300], encoder="fastText", a_tuple=("s", 5), h_param={"y": 1, "n": 0}, nested=NestedArg())
-parsed = MyTup(sys.argv[1:])
+parsed = MyTup.__from_argv__(sys.argv[1:])
 if parsed == expected_arg:
     print(f"Matched: '{parsed}'")
 else:

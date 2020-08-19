@@ -1,4 +1,4 @@
 API Reference
 -------------
-.. automodule:: linkedin.smart_arg
+.. automodule:: smart_arg
    :members:
