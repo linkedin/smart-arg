@@ -63,10 +63,12 @@ All other classes and methods in this module are considered implementation detai
 __all__ = (
     'arg_suite',
     'custom_arg_suite',
-    'ArgSuite', 'LateInit',
+    'ArgSuite',
+    'LateInit',
     'SmartArgError',
     'TypeHandler',
-    'PrimitiveHandlerAddon')
+    'PrimitiveHandlerAddon',
+)
 
 import inspect
 import logging
@@ -83,12 +85,10 @@ from typing import (Any, Collection, Dict, Generic, Iterable, List, NamedTuple,
 
 class DefaultMarker:
     """special singleton/class to mark default."""
-    pass
 
 
 class LateInit:
     """special singleton/class to mark post-parse-init'ed fields"""
-    pass
 
 
 ArgType = TypeVar('ArgType', bound=NamedTuple)  # NamedTuple is not a real class bound, but setting `bound` to NamedTuple makes mypy happier
@@ -106,10 +106,10 @@ if LEVEL_KEY in os.environ:
     logger.info(f"Detected environment var `{LEVEL_KEY}, set log level to '{log_level}' and log to stream.")
 
 if sys.version_info >= (3, 8):
-    logger.info(f"Python {sys.version_info} >= 3.8. from typing import get_origin, get_args ")
+    # "Python >= 3.8. from typing import get_origin, get_args ")
     from typing import get_args, get_origin
 elif sys.version_info >= (3, 7):
-    logger.info(f"Python {sys.version_info} == 3.7.x. Defining get_origin, get_args ")
+    # Python == 3.7.x. Defining the back-ported get_origin, get_args ")
     get_origin, get_args = lambda tp: vars(tp).get('__origin__'), lambda tp: vars(tp).get('__args__') if vars(tp).get('__args__') else ()  # noqa: E731
 else:
     try:
@@ -122,7 +122,7 @@ else:
 
 
 class SmartArgError(Exception):  # TODO Extend to better represent different types of errors.
-    pass
+    """Base exception for smart-arg."""
 
 
 class PrimitiveHandlerAddon:
@@ -138,7 +138,7 @@ class PrimitiveHandlerAddon:
             kwargs.choices = [True, False]
 
     @staticmethod
-    def build_type(arg_type: Type):
+    def build_type(arg_type: Type) -> Any:
         return (lambda s: True if s == 'True' else False if s == 'False' else s) if arg_type is bool else arg_type
     handled_types: Collection[Type] = PRIMITIVES
 
