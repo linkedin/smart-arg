@@ -18,14 +18,20 @@ be encrypted using PGP ([public key][pubkey]) and sent to
 
 ## Setup for development
 
-```shell
-# Uncomment the next two lines to set up and activate a virtual environment as needed
+```shell-session
+# # Uncomment the next a few lines to set up a virtual environment and install the packages as needed
 # python3 -m venv .venv
 # . .venv/bin/activate
+# pip install -U setuptools pytest flake8 mypy
 
 python3 setup.py develop
-# pip install pytest-flake8  # as needed
-pytest --flake8
+
+# Happily make changes
+# ...
+
+mypy
+flake8 smart_arg.py
+pytest
 ```
 
 
