@@ -11,7 +11,7 @@ functionalities, and helps one produce correct code.
 
 ## Quick start
 
-The `smarg-arg` package is available through `pip`.
+The [`smarg-arg`](https://pypi.org/project/smart-arg/) package is available through `pip`.
 ```shell
 pip3 install smart-arg
 ```
