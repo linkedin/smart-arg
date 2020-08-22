@@ -67,7 +67,7 @@ print(f"My network has {len(my_arg.nn)} layers with sizes of {my_arg.nn}.")
 
 ```
 
-```shell
+```shell-session
 > python my_job.py -h
 usage: my_job.py [-h] --nn [int [int ...]] --a_tuple str int --encoder str
                  --h_param [str:int [str:int ...]] [--batch_size int]
