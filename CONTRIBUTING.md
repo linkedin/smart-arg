@@ -16,7 +16,7 @@ be encrypted using PGP ([public key][pubkey]) and sent to
 [security@linkedin.com][disclosure_email] preferably with the title
 "Vulnerability in Github LinkedIn/smart-arg - &lt;short summary&gt;".
 
-## Setup for development
+## Setup for Development
 
 ```shell-session
 # # Uncomment the next a few lines to set up a virtual environment and install the packages as needed

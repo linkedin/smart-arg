@@ -6,7 +6,7 @@ For example, when a field's default value depends on some other input fields, on
 placeholder `LateInit`, and a `__post_init__` function to define the actual value. 
 
 The `__post_init__` function can also be used to validate the argument after instantiation:
-:
+
 ```python
 from typing import NamedTuple
 
@@ -36,7 +36,7 @@ Notes:
 to be defined, replace any `LateInit` with actual values, or it will fail the internal validation and trigger a `SmartArgError`.
 * Field mutations are only allowed in the `__post_init__` as part of the class instance construction. No mutations are
 allowed after construction, including manually calling `__post_init__`.
-* `__post_init__` of a `NamedTuple` works similar to 
+* `__post_init__` of a `NamedTuple` works similar to that of a `dataclass`.
 
 ## Supported Argument Classes
 ### [`NameTuple`](https://docs.python.org/3.7/library/typing.html?highlight=namedtuple#typing.NamedTuple)
