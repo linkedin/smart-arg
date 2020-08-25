@@ -1,32 +1,45 @@
-from setuptools import find_namespace_packages, setup
+"""Argument class <=> Human friendly cli"""
+
+from setuptools import setup
 
 with open('README.md', encoding='utf-8') as f:
-    long_description = f.read()
-# TODO add project_urls once determined.
+    readme = f.read()
+
+# TODO uncomment `doc` usages once set up.
+doc = 'https://smart-arg.readthedocs.io'
+
 setup(
     name='smart-arg',
-    version='1.0.0',
-    author='',
-    author_email='',
-    description='Smart Arguments Suite',
-    package_dir={'': 'src'},
-    long_description=long_description,
+    version='0.1.2',
+    description=__doc__,
+    long_description=readme,
     long_description_content_type='text/markdown',
-    url='',
-    download_url='',
-    packages=find_namespace_packages(where='src'),
-    include_package_data=True,
+    license='BSD-2-CLAUSE',
+    python_requires='>=3.6',
+    # url=doc,
+    download_url='https://pypi.python.org/pypi/smart-arg',
+    project_urls={
+        # 'Documentation': doc,
+        'Source': 'https://github.com/linkedin/smart-arg.git',
+        'Tracker': 'https://github.com/linkedin/smart-arg/issues',
+    },
+    py_modules=['smart_arg'],
     install_requires=[],
     tests_require=['pytest-flake8'],
     classifiers=[
-        'Programming Language :: Python :: 3.7',
-        'Programming Language :: Python :: 3.8',
+        'Programming Language :: Python',
+        'Programming Language :: Python :: 3',
         'Operating System :: OS Independent',
+        'License :: OSI Approved',
         "Typing :: Typed"
     ],
     keywords=[
         'typing',
         'argument parser',
-        'python'
+        'reverse argument parser',
+        'human friendly',
+        'configuration (de)serialization',
+        'python',
+        'cli'
     ]
 )

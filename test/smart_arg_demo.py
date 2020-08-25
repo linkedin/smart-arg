@@ -1,7 +1,7 @@
 import sys
 from typing import (List, NamedTuple, Tuple, Optional, Dict)
 
-from linkedin.smart_arg import arg_suite
+from smart_arg import arg_suite
 
 
 class NestedArg(NamedTuple):
@@ -21,7 +21,7 @@ class MyTup(NamedTuple):
     # nested_arg: NestedArg
 
     nn: List[int]  # Comments go to argparse help
-    _nn = {'choices': (200, 300)}
+    __nn = {'choices': (200, 300)}
     a_tuple: Tuple[str, int]
     encoder: str  # Text encoder type
     # empty_tuple: Tuple = 0
@@ -37,19 +37,20 @@ class MyTup(NamedTuple):
             print(f)
         assert self.n
 
-    def __post_process__(self) -> 'MyTup':
+    def __late_init__(self) -> 'MyTup':
         processed = self
         if processed.n is None:
             processed = processed._replace(n=processed.nn[0])
         return processed
 
 
-expected_arg = MyTup(nn=[200, 300], encoder="fastText", a_tuple=("s", 5), h_param={"y": 1, "n": 0}, nested=NestedArg()).__post_process__()
-parsed = MyTup(sys.argv[1:])
+expected_arg = MyTup(nn=[200, 300], encoder="fastText", a_tuple=("s", 5), h_param={"y": 1, "n": 0}, nested=NestedArg())
+parsed = MyTup.__from_argv__(sys.argv[1:])
 if parsed == expected_arg:
     print(f"Matched: '{parsed}'")
 else:
-    print(f"Error(168!"
+    err_code = 168
+    print(f"Error({err_code})"
           f"Expected: {expected_arg}\n"
           f"Parsed: {parsed}")
-    exit(168)
+    exit(err_code)
