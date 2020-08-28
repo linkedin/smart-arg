@@ -3,6 +3,7 @@ import os
 import subprocess
 import sys
 from dataclasses import dataclass, FrozenInstanceError
+from math import sqrt
 from types import SimpleNamespace
 from typing import List, NamedTuple, Tuple, Optional, Dict, Set
 from contextlib import redirect_stderr
@@ -62,11 +63,8 @@ def test_basic_parse_to_arg():
     assert my_parser._option_string_actions['--a_float'].help == '(float, required)  a is float'
     assert my_parser._option_string_actions['--a_str'].choices == ['hello', 'bonjour', 'hola']
 
-
-    # parsed_arg = MyTupBasic(arg_cmd.split())
-    # assert parsed_arg == my_tup_basic
-#
-# test_basic_parse_to_arg()
+    parsed_arg = MyTupBasic(arg_cmd.split())
+    assert parsed_arg == my_tup_basic
 
 
 muted = redirect_stderr(SimpleNamespace(write=lambda *_: None))
@@ -199,6 +197,10 @@ def test_primitive_addon():
             if arg_type is int:
                 kwargs.type = lambda s: int(s) ** 2
 
+        @staticmethod
+        def str(arg) -> str:
+            return str(int(sqrt(arg)))
+
         handled_types = [int]
 
     class IntTypeHandler(TypeHandler):
@@ -211,8 +213,10 @@ def test_primitive_addon():
     class MyTuple(NamedTuple):
         a_int: int
 
-    tup = MyTuple.__from_argv__(['--a_int', '3'])
+    argv = ['--a_int', '3']
+    tup = MyTuple.__from_argv__(argv)
     assert tup.a_int == 9
+    assert tup.__to_argv__() == argv
     my_parser = MyTuple.__arg_suite__._parser
     assert my_parser._option_string_actions['--a_int'].help == '(int, squared)'
 
