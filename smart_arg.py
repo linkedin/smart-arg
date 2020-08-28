@@ -138,6 +138,16 @@ class PrimitiveHandlerAddon:
     @staticmethod
     def build_type(arg_type: Type) -> Any:
         return (lambda s: True if s == 'True' else False if s == 'False' else s) if arg_type is bool else arg_type
+
+    @staticmethod
+    def str(arg: Any) -> str:
+        """Define to serialize the `arg` to a string.
+
+        :param arg: The argument
+        :type arg: Any type that is supported by this class
+        :return: The string serialization of `arg`
+        """
+        return str(arg)
     handled_types: Collection[Type] = PRIMITIVES
 
 
@@ -199,9 +209,9 @@ class TypeHandler:
         :return: iterable command line str"""
         yield action.option_strings[0]
         if not isinstance(arg, str) and isinstance(arg, Iterable):
-            yield from (str(a) for a in arg)
+            yield from (self.primitive_addons[type(a)].str(a) for a in arg)
         else:
-            yield str(arg)
+            yield self.primitive_addons[type(arg)].str(arg)
 
     @staticmethod
     def type_to_str(t: Union[type, Type]) -> str:
@@ -319,6 +329,9 @@ class _dataclasses:
                 getattr(object, fun)(self, name, *args, **kwargs)
 
         def init(self, *args, **kwargs):
+            if args and hasattr(self, '__frozen__'):
+                logger.debug(f"Assuming {self} is from patch new with __from_argv__, already initialized, skipping init.")
+                return
             self.__original_init__(*args, **kwargs)
             object.__setattr__(self, '__frozen__', True)
             self.__class__.__arg_suite__.post_validation(self)
@@ -359,13 +372,14 @@ class ArgSuite(Generic[ArgType]):
         :param kwargs: Optional keyword arguments, to be passed to the argument class specific instance creator."""
         logger.debug(f"Patched new for {arg_class} is called with {args} and {kwargs}.")
         if args:
+            warnings.warn(f"Calling the patched constructor of {arg_class} with argv is deprecated, please use {arg_class}.__from_argv__ instead.")
             # TODO Exception handling with helpful error message
             if (kwargs or len(args) > 2 or len(args) == 2 and args[1].__class__ not in (NoneType, str)
                     or not (args[0] is None or isinstance(args[0], Sequence) and all(a.__class__ is str for a in args[0]))):
                 raise SmartArgError(f"Calling '{arg_class}(positional {args}, keyword {kwargs})' is not allowed:\n"
                                     f"Only accept positional arguments to parse to the '{arg_class}'\n"
                                     f"keyword arguments can only be used to create an instance directly.")
-            return arg_class.__arg_suite__.parse_to_arg(*args)
+            return arg_class.__from_argv__(args[0])
         else:
             return _get_type_proxy(arg_class).new_instance(arg_class, kwargs)
 
@@ -407,8 +421,8 @@ class ArgSuite(Generic[ArgType]):
         self._gen_arguments_from_class(self._arg_class, '', True, [], type_proxy)
         return arg_class
 
-    def _validate_fields(self, arg_class, type_proxy) -> None:
-        """Validate fields in the decorated class.
+    def _validate_fields(self, arg_class: Type) -> None:
+        """Validate fields in `arg_class`.
 
         :raise: SmartArgError if the decorated argument class has non-typed field with defaults and such field
                 does not startswith "_" to overwrite the existing argument field property."""
@@ -435,7 +449,7 @@ class ArgSuite(Generic[ArgType]):
         elif not (suite and suite._arg_class is arg_class) and (hasattr(arg_class, '__post_init__')):
             raise SmartArgError(f"Nested argument class '{arg_class}' with '__post_init__' expected to be decorated.")
         else:
-            self._validate_fields(arg_class, type_proxy)
+            self._validate_fields(arg_class)
             comments = _mro_all(arg_class, self.get_comments)
             for raw_arg_name, arg_type in _annotations(arg_class).items():
                 arg_name = f'{prefix}{raw_arg_name}'
