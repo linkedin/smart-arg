@@ -74,6 +74,7 @@ from argparse import Action, ArgumentParser
 from types import SimpleNamespace as KwargsType
 from typing import Any, Collection, Dict, Generic, Iterable, List, NamedTuple, Optional, Sequence, Set, Tuple, Type, TypeVar, Union
 
+__version__ = '0.2.*'
 ArgType = TypeVar('ArgType', bound=NamedTuple)  # NamedTuple is not a real class bound, but setting `bound` to NamedTuple makes mypy happier
 NoneType = None.__class__
 FieldMeta = NamedTuple('FieldMeta', (('comment', str), ('default', Any), ('type', Type)))
