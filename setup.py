@@ -8,8 +8,9 @@ def _resolve_version():
     import subprocess
     is_dynamic = __version__[-1] == '*'
     if is_dynamic:
+        base_version = __version__[0:-1] + '0'
         kwargs = {'stdout': subprocess.PIPE, 'stderr': subprocess.PIPE, 'shell': True}
-        completed_process = subprocess.run(f'git describe --tags --match "v{__version__}"', **kwargs)
+        completed_process = subprocess.run(f'git describe --tags --match "v{base_version}"', **kwargs)
         git_tag = completed_process.stdout.decode('utf-8').rstrip('\n')
         patch = git_tag[git_tag.rfind('-', 0, -9) + 1:-9] if git_tag else '0'
         version = __version__[0:-1] + patch
