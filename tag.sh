@@ -5,7 +5,8 @@ repo=$(basename "$remote" .git)
 commit=$(git rev-parse HEAD)
 new=$1
 
-git tag "$new" || exit
+# Simulate the tagging locally and popluate the error
+git tag "$new" || exit $?
 
 # POST a new ref to repo via Github API
 curl -s -X POST https://api.github.com/repos/$REPO_OWNER/$repo/git/refs \

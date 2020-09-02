@@ -55,6 +55,7 @@ The module contains the following public classes:
 
 All other classes and methods in this module are considered implementation details."""
 
+__version__ = '0.2.*'
 __all__ = (
     'arg_suite',
     'custom_arg_suite',
@@ -74,7 +75,6 @@ from argparse import Action, ArgumentParser
 from types import SimpleNamespace as KwargsType
 from typing import Any, Collection, Dict, Generic, Iterable, List, NamedTuple, Optional, Sequence, Set, Tuple, Type, TypeVar, Union
 
-__version__ = '0.2.*'
 ArgType = TypeVar('ArgType', bound=NamedTuple)  # NamedTuple is not a real class bound, but setting `bound` to NamedTuple makes mypy happier
 NoneType = None.__class__
 FieldMeta = NamedTuple('FieldMeta', (('comment', str), ('default', Any), ('type', Type)))
