@@ -4,6 +4,7 @@ import subprocess
 import sys
 from dataclasses import dataclass, FrozenInstanceError
 from math import sqrt
+from enum import Enum
 from types import SimpleNamespace
 from typing import List, NamedTuple, Tuple, Optional, Dict, Set, Type, Any
 from contextlib import redirect_stderr
@@ -354,3 +355,35 @@ def test_dataclass():
         frozen: bool = True
 
     pytest.raises(FrozenInstanceError, NoPostInit().mutate)  # mutation not allowed after init
+
+
+def test_basic_enum():
+    class Color(Enum):
+        RED = 1
+        BLUE = 2
+        GREEN = 3
+
+    @arg_suite
+    class MyEnumBasic(NamedTuple):
+        a_int: int
+        my_color_dict: Dict[int, Color]
+        my_color_list: List[Color]
+        my_color_tuple: Tuple[Color, int]
+        default_color: Color = Color.RED
+
+    arg_cmd = ['--a_int', '1', '--my_color_dict', '10:RED', '20:BLUE', '--my_color_list', 'GREEN',
+               '--my_color_tuple', 'BLUE', '100', '--default_color', 'GREEN']
+    basic_tup = MyEnumBasic(a_int=1, my_color_dict={10: Color.RED, 20: Color.BLUE}, my_color_list=[Color.GREEN],
+                            my_color_tuple=(Color.BLUE, 100), default_color=Color.GREEN)
+
+    parsed_tup:MyEnumBasic = MyEnumBasic.__from_argv__(arg_cmd)
+    assert basic_tup == parsed_tup
+    seriliazed_cmd_line = basic_tup.__to_argv__()
+    assert set(seriliazed_cmd_line) == set(arg_cmd)
+    my_parser = MyEnumBasic.__arg_suite__._parser
+    assert my_parser._option_string_actions['--my_color_dict'].metavar == "int:<enum 'Color'>"
+    assert my_parser._option_string_actions['--default_color'].choices == list(Color)
+
+    arg_cmd2 = ['--a_int', '1', '--my_color_dict', '10:red', '--my_color_list', 'GREEN', '--my_color_tuple', 'BLUE',
+                '100']
+    pytest.raises(SmartArgError, MyEnumBasic.__from_argv__, arg_cmd2)

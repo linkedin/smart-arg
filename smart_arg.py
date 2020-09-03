@@ -74,6 +74,7 @@ import warnings
 from argparse import Action, ArgumentParser
 from types import SimpleNamespace as KwargsType
 from typing import Any, Callable, Dict, Generic, Iterable, List, NamedTuple, Optional, Sequence, Tuple, Type, TypeVar, Union
+from enum import EnumMeta, Enum
 
 ArgType = TypeVar('ArgType', bound=NamedTuple)  # NamedTuple is not a real class bound, but setting `bound` to NamedTuple makes mypy happier
 NoneType = None.__class__
@@ -145,7 +146,17 @@ class PrimitiveHandlerAddon:
     Users can extend/modify the primitive handling by inheriting this class."""
     @staticmethod
     def build_type(arg_type: Type) -> Union[Type, Callable[[str], Any]]:
-        return (lambda s: True if s == 'True' else False if s == 'False' else _raise_if(f"Invalid bool: {s!r}")) if arg_type is bool else arg_type
+        def from_string(s: str):
+            try:
+                return arg_type[s]
+            except KeyError:
+                raise SmartArgError(f"Cannot find {s} in enum class {arg_type}.")
+        if arg_type is bool:
+            return lambda s: True if s == 'True' else False if s == 'False' else _raise_if(f"Invalid bool: {s!r}")
+        elif type(arg_type) is EnumMeta:
+            return from_string
+        else:
+            return arg_type
 
     @staticmethod
     def build_str(arg: Any) -> str:
@@ -155,11 +166,11 @@ class PrimitiveHandlerAddon:
         :type arg: Any type that is supported by this class
         :return: The string serialization of `arg`
         """
-        return str(arg)
+        return str(arg.name) if isinstance(arg, Enum) else str(arg)
 
     @staticmethod
     def handles(t: Type) -> bool:
-        return t in (str, int, float, bool)
+        return t in (str, int, float, bool) or type(t) is EnumMeta
 
 
 class TypeHandler:
@@ -239,6 +250,8 @@ class PrimitiveHandler(TypeHandler):
         kwargs.type = _first_handles(self.primitive_addons, arg_type).build_type(arg_type)
         if kwargs.type == bool:
             kwargs.choices = [True, False]
+        elif type(arg_type) == EnumMeta:
+            kwargs.choices = list(arg_type)  # type: ignore
 
 
 class TupleHandler(TypeHandler):
@@ -281,7 +294,7 @@ class CollectionHandler(TypeHandler):
         self.unboxed_type = self.arg_types[0]
         kwargs.metavar = self._type_to_str(self.unboxed_type)
         kwargs.nargs = '*'
-        kwargs.type = self.unboxed_type
+        kwargs.type = _first_handles(self.primitive_addons, self.unboxed_type).build_type(self.unboxed_type)
 
     def handles(self, t: Type) -> bool:
         args = get_args(t)
@@ -307,7 +320,8 @@ class DictHandler(CollectionHandler):
 
     def gen_cli_arg(self, action: Action, arg):
         yield action.option_strings[0]
-        yield from (f'{k}:{v}' for k, v in arg.items())
+        arg_to_str = lambda arg_v: _first_handles(self.primitive_addons, type(arg_v)).build_str(arg_v)
+        yield from (f'{arg_to_str(k)}:{arg_to_str(v)}' for k, v in arg.items())
 
     def handles(self, t: Type) -> bool:
         args, addons = get_args(t), self.primitive_addons
@@ -503,6 +517,7 @@ class ArgSuite(Generic[ArgType]):
                         if not parent_required and hasattr(kwargs, 'required'):
                             del kwargs.required
                         kwargs.default = MISSING  # Marker for fields absent from parsing
+                        logger.info(f"Adding kwargs {kwargs}")
                         self.handler_actions[arg_name] = handler, self._parser.add_argument(f'--{arg_name}', **vars(kwargs))
                 except BaseException as b_e:
                     logger.critical(f"Failed creating argument parser for {arg_name} with exception {b_e}.")
