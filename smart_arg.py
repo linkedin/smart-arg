@@ -1,4 +1,4 @@
-"""Smart Arguments Suite
+"""Smart Argument Suite
 
 This module is an argument serialization and deserialization library that:
 
@@ -43,7 +43,7 @@ The following is a simple usage example::
 
 The module contains the following public classes:
 
-- `arg_suite` -- The main entry point for smart arguments suite. As the
+- `arg_suite` -- The main entry point for Smart Argument Suite. As the
     example above shows, this decorator will attach an `ArgSuite` instance to
     the argument `NamedTuple` or `dataclass`.
 

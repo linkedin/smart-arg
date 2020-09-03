@@ -18,7 +18,7 @@ source_suffix = '.rst'
 # The master toctree document.
 master_doc = 'index'
 
-project = u'Smart Arguments Suite'
+project = u'Smart Argument Suite'
 
 # General information about the project.
 copyright = u'{year}, LinkedIn'.format(year=datetime.datetime.today().year)

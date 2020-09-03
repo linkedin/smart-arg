@@ -1,5 +1,4 @@
 """Argument class <=> Human friendly cli"""
-import logging
 
 from setuptools import setup
 from smart_arg import __version__
@@ -7,14 +6,13 @@ from smart_arg import __version__
 
 def _resolve_version():
     import subprocess
-    is_dynamic = __version__[-1] == '*'
-    if is_dynamic:
+    if __version__[-1] == '*':  # Only take the last char as '*' as convention, not checking for errors here
         base_tag = 'v' + __version__[0:-1] + '0'
         run = subprocess.run(f'git rev-list --first-parent --count "{base_tag}"..', stdout=subprocess.PIPE, shell=True)
-        version = __version__[0:-1] + ('0' if run.returncode else run.stdout.decode('utf-8'))
+        version = __version__[0:-1] + ('0' if run.returncode else run.stdout.decode('utf-8').rstrip('\n'))
     else:
         version = __version__
-    logging.info(f"Version is resolved to {version!r}.")
+    print(f"Version is resolved to {version!r}.")
     return version
 
 
@@ -41,7 +39,7 @@ setup(
     },
     py_modules=['smart_arg'],
     install_requires=[],
-    tests_require=['pytest'],
+    tests_require=['pytest', 'mypy'],
     classifiers=[
         'Programming Language :: Python',
         'Programming Language :: Python :: 3',

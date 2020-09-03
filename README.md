@@ -1,6 +1,6 @@
-# Introduction to Smart Arguments Suite (`smart-arg`)
+# Introduction to Smart Argument Suite (`smart-arg`)
 
-Smart Arguments Suite (`smart-arg`) is a slim and handy Python library that help one work safely and conveniently 
+Smart Argument Suite (`smart-arg`) is a slim and handy Python library that help one work safely and conveniently 
 with the arguments that are represented by the immutable argument class 
 ([`NameTuple`](https://docs.python.org/3.7/library/typing.html?highlight=namedtuple#typing.NamedTuple) or 
 [`dataclass`](https://docs.python.org/3.7/library/dataclasses.html)),
