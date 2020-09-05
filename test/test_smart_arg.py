@@ -5,12 +5,12 @@ import sys
 from dataclasses import dataclass, FrozenInstanceError
 from math import sqrt
 from types import SimpleNamespace
-from typing import List, NamedTuple, Tuple, Optional, Dict, Set
+from typing import List, NamedTuple, Tuple, Optional, Dict, Set, Type, Any
 from contextlib import redirect_stderr
 
 import pytest
 
-from smart_arg import arg_suite, custom_arg_suite, LateInit, SmartArgError, TypeHandler, PrimitiveHandlerAddon
+from smart_arg import arg_suite, custom_arg_suite, LateInit, SmartArgError, TypeHandler, _first_handles
 from smart_arg_mock import main, MockArgTup
 
 
@@ -191,23 +191,29 @@ def test_argv():
 
 
 def test_primitive_addon():
-    class IntHandlerAddon(PrimitiveHandlerAddon):
+    class IntHandlerAddon:
         @staticmethod
-        def build_primitive(arg_type, kwargs):
-            if arg_type is int:
-                kwargs.type = lambda s: int(s) ** 2
+        def build_type(arg_type) -> Any:
+            return lambda s: int(s) ** 2
 
         @staticmethod
-        def str(arg) -> str:
+        def build_str(arg) -> str:
             return str(int(sqrt(arg)))
 
-        handled_types = [int]
+        @staticmethod
+        def handles(t: Type) -> bool:
+            return t == int
 
     class IntTypeHandler(TypeHandler):
-        def _build_common(self, kwargs, field_meta):
+        def _build_common(self, kwargs, field_meta) -> None:
+            super()._build_common(kwargs, field_meta)
             kwargs.help = '(int, squared)'
 
-        handled_types = [int]
+        def _build_other(self, kwargs, arg_type) -> None:
+            kwargs.type = _first_handles(self.primitive_addons, arg_type).build_type(arg_type)
+
+        def handles(self, t: Type) -> bool:
+            return t == int
 
     @custom_arg_suite(primitive_handler_addons=[IntHandlerAddon], type_handlers=[IntTypeHandler])
     class MyTuple(NamedTuple):
