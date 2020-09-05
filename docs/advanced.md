@@ -91,7 +91,8 @@ is defined in source code `PrimitiveHandlerAddon`. A user can pass in the custom
 other than primitive ones such as `List`, `Set`, `Dict`, `Tuple`, etc.
 
 ```python
-from typing import NamedTuple
+from math import sqrt
+from typing import NamedTuple, Any, Type
 
 from smart_arg import PrimitiveHandlerAddon, TypeHandler, custom_arg_suite
 
@@ -99,18 +100,27 @@ from smart_arg import PrimitiveHandlerAddon, TypeHandler, custom_arg_suite
 # overwrite int primitive type handling by squaring it
 class IntHandlerAddon(PrimitiveHandlerAddon):
     @staticmethod
-    def build_primitive(arg_type, kwargs):
-        if arg_type is int:
-            kwargs.type = lambda s: int(s) ** 2
+    def build_type(arg_type) -> Any:
+        return lambda s: int(s) ** 2
 
-    handled_types = [int]
+    @staticmethod
+    def build_str(arg) -> str:
+        return str(int(sqrt(arg)))
 
+    @staticmethod
+    def handles(t: Type) -> bool:
+        return t == int
 
 class IntTypeHandler(TypeHandler):
-    def _build_common(self, kwargs, field_meta):
+    def _build_common(self, kwargs, field_meta) -> None:
+        super()._build_common(kwargs, field_meta)
         kwargs.help = '(int, squared)'
 
-    handled_types = [int]
+    def _build_other(self, kwargs, arg_type) -> None:
+        kwargs.type = self.primitive_addons[0].build_type(arg_type)
+
+    def handles(self, t: Type) -> bool:
+        return t == int
 
 
 @custom_arg_suite(primitive_handler_addons=[IntHandlerAddon], type_handlers=[IntTypeHandler])

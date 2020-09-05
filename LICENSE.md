@@ -1,8 +1,9 @@
 LICENSE
 =======
-BSD 2-CLAUSE LICENSE
-Copyright 2020 LinkedIn Corporation
-All Rights Reserved.
+    BSD 2-CLAUSE LICENSE
+    Copyright 2020 LinkedIn Corporation
+    All Rights Reserved.
+
 Redistribution and use in source and binary forms, with or
 without modification, are permitted provided that the following
 conditions are met:
