@@ -129,7 +129,7 @@ class SmartArgError(Exception):  # TODO Extend to better represent different typ
     """Base exception for smart-arg."""
 
 
-def _raise_if(message: str, condition=True):
+def _raise_if(message: str, condition: Any = True):
     if condition:
         raise SmartArgError(message)
 
@@ -393,8 +393,7 @@ class ArgSuite(Generic[ArgType]):
             warnings.warn(f"Calling the patched constructor of {arg_class} with argv is deprecated, please use {arg_class}.__from_argv__ instead.")
             # TODO Exception handling with helpful error message
             _raise_if(f"Calling '{arg_class}(positional {args}, keyword {kwargs})' is not allowed:\n"
-                      f"Only accept positional arguments to parse to the '{arg_class}'\n"
-                      f"keyword arguments can only be used to create an instance directly.",
+                      f"Only accept positional arguments to parse to the '{arg_class}'\nkeyword arguments can only be used to create an instance directly.",
                       kwargs or len(args) > 2 or len(args) == 2 and args[1].__class__ not in (NoneType, str)
                       or not (args[0] is None or isinstance(args[0], Sequence) and all(a.__class__ is str for a in args[0])))
 
@@ -402,23 +401,11 @@ class ArgSuite(Generic[ArgType]):
         else:
             return _get_type_proxy(arg_class).new_instance(arg_class, kwargs)
 
-    def __init__(self, type_handlers: List[Type[TypeHandler]] = None, primitive_handler_addons: List[Type[PrimitiveHandlerAddon]] = None) -> None:
-        addons = [PrimitiveHandlerAddon]
-        if primitive_handler_addons:
-            addons += primitive_handler_addons
-        handler_types = [PrimitiveHandler, CollectionHandler, DictHandler, TupleHandler]
-        if type_handlers:
-            handler_types += type_handlers
-        primitives = tuple(reversed(addons))
-        handler_list = tuple(handler(primitives) for handler in handler_types)
-        self.handlers = tuple(reversed(handler_list))
-
-    def __call__(self, arg_class):
+    def __init__(self, type_handlers: Sequence[TypeHandler], arg_class):
         type_proxy = _get_type_proxy(arg_class)
         _raise_if(f"Unsupported argument class {arg_class}.", not type_proxy)
-
+        self.handlers = type_handlers
         self.handler_actions: Dict[str, Union[Tuple[TypeHandler, Action], Tuple[None, Any]]] = {}
-
         type_proxy.patch(arg_class)
         #  A big assumption here is that the argument classes never override __new__
         if not hasattr(arg_class, '__original_new__'):
@@ -428,10 +415,9 @@ class ArgSuite(Generic[ArgType]):
         arg_class.__from_argv__ = self.parse_to_arg
         arg_class.__arg_suite__ = self
         self._arg_class = arg_class
-        self._parser = ArgumentParser(description=self._arg_class.__doc__, argument_default=MISSING, fromfile_prefix_chars='@')
-        self._parser.convert_arg_line_to_args = lambda arg_line: arg_line.split()
+        self._parser = ArgumentParser(description=self._arg_class.__doc__, argument_default=MISSING, fromfile_prefix_chars='@')  # type: ignore
+        self._parser.convert_arg_line_to_args = lambda arg_line: arg_line.split()  # type: ignore
         self._gen_arguments_from_class(self._arg_class, '', True, [], type_proxy)
-        return arg_class
 
     def _validate_fields(self, arg_class: Type) -> None:
         """Validate fields in `arg_class`.
@@ -651,9 +637,23 @@ def custom_arg_suite(type_handlers: List[Type[TypeHandler]] = None, primitive_ha
     :param primitive_handler_addons: the primitive types handling in addition to the provided primitive type basic operations
     :param type_handlers: the types handling in addition to the provided types handling.
     :return: the argument class decorator"""
-    def decorator(cls):
-        return ArgSuite(type_handlers, primitive_handler_addons)(cls)
-    return decorator
+    class Decorator:
+        def __init__(self) -> None:
+            addons = [PrimitiveHandlerAddon]
+            if primitive_handler_addons:
+                addons += primitive_handler_addons
+            handler_types = [PrimitiveHandler, CollectionHandler, DictHandler, TupleHandler]
+            if type_handlers:
+                handler_types += type_handlers
+            primitives = tuple(reversed(addons))
+            handler_list = tuple(handler(primitives) for handler in handler_types)
+            self.handlers = tuple(reversed(handler_list))
+
+        def __call__(self, cls):
+            ArgSuite(self.handlers, cls)
+            return cls
+
+    return Decorator()
 
 
 arg_suite = custom_arg_suite()  # Default argument class decorator to expose smart arg functionalities.
