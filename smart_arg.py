@@ -227,7 +227,7 @@ class TypeHandler:
 
         :param t: type of the argument, i.e. float, typing.Dict[str, int], typing.Set[int], typing.List[str] etc.
         :return: string representation of the argument type"""
-        return t.__name__ if type(t) == type else RESTORE_OPTIONAL.sub('Optional[\\1]', str(t).replace('typing.', ''))
+        return t.__name__ if type(t) == type or type(t) == EnumMeta else RESTORE_OPTIONAL.sub('Optional[\\1]', str(t).replace('typing.', ''))
 
     def handles(self, t: Type) -> bool:
         raise NotImplementedError

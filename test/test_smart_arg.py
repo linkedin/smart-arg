@@ -381,7 +381,7 @@ def test_basic_enum():
     serialized_cmd_line = basic_tup.__to_argv__()
     assert set(serialized_cmd_line) == set(arg_cmd)
     my_parser = MyEnumBasic.__arg_suite__._parser
-    assert my_parser._option_string_actions['--my_color_dict'].metavar == "int:<enum 'Color'>"
+    assert my_parser._option_string_actions['--my_color_dict'].metavar == "int:Color"
     assert my_parser._option_string_actions['--default_color'].choices == Color
 
     arg_cmd2 = ['--a_int', '1', '--my_color_dict', '10:red', '--my_color_list', 'GREEN', '--my_color_tuple', 'BLUE', '100']
