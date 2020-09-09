@@ -114,7 +114,7 @@ _mro_all = lambda arg_class, get_dict: {k: v for b in (*arg_class.__mro__[-1:0:-
 # note: Fields without type annotation won't be regarded as a property/entry _fields.
 _annotations = lambda arg_class: _mro_all(arg_class, lambda b: getattr(b, '__annotations__', {}))
 try:
-    from dataclasses import FrozenInstanceError, MISSING, asdict, is_dataclass
+    from dataclasses import MISSING, asdict, is_dataclass
 except ImportError:
     logger.warning("Importing dataclasses failed. You might need to 'pip install dataclasses' on python 3.6.")
     class MISSING: pass  # type: ignore # noqa: E701
@@ -146,17 +146,9 @@ class PrimitiveHandlerAddon:
     Users can extend/modify the primitive handling by inheriting this class."""
     @staticmethod
     def build_type(arg_type: Type) -> Union[Type, Callable[[str], Any]]:
-        def from_string(s: str):
-            try:
-                return arg_type[s]
-            except KeyError:
-                raise SmartArgError(f"Cannot find {s} in enum class {arg_type}.")
-        if arg_type is bool:
-            return lambda s: True if s == 'True' else False if s == 'False' else _raise_if(f"Invalid bool: {s!r}")
-        elif type(arg_type) is EnumMeta:
-            return from_string
-        else:
-            return arg_type
+        return (lambda s: True if s == 'True' else False if s == 'False' else _raise_if(f"Invalid bool: {s!r}")) if arg_type is bool else \
+            (lambda s: getattr(arg_type, s, None) or _raise_if(f"Invalid enum {s!r} for {arg_type!r}")) if type(arg_type) is EnumMeta else \
+            arg_type
 
     @staticmethod
     def build_str(arg: Any) -> str:
@@ -248,10 +240,9 @@ class PrimitiveHandler(TypeHandler):
     def _build_other(self, kwargs: KwargsType, arg_type: Type) -> None:
         super()._build_other(kwargs, arg_type)
         kwargs.type = _first_handles(self.primitive_addons, arg_type).build_type(arg_type)
-        if kwargs.type == bool:
-            kwargs.choices = [True, False]
-        elif type(arg_type) == EnumMeta:
-            kwargs.choices = list(arg_type)  # type: ignore
+        kwargs.choices = (True, False) if arg_type == bool else \
+            arg_type if type(arg_type) == EnumMeta else \
+            None
 
 
 class TupleHandler(TypeHandler):
@@ -274,8 +265,7 @@ class TupleHandler(TypeHandler):
         super()._build_other(kwargs, arg_type)
         # get the tuple element types
         types = get_args(arg_type)
-        if not types:
-            raise SmartArgError(f'Invalid Tuple type: {arg_type}')
+        _raise_if(f'Invalid Tuple type: {arg_type}', not types)
         kwargs.nargs = len(types)
         kwargs.metavar = tuple(self._type_to_str(t) for t in types)
         kwargs.type = TupleHandler.__BuildType(types, self.primitive_addons)
@@ -358,10 +348,8 @@ class _dataclasses:
     def patch(cls):
         """Patch the argument dataclass so that `post_validation` is called and it's immutable if not `frozen` after initialization"""
         def throw_if_frozen(self, fun, name, *args, **kwargs):
-            if getattr(self, '__frozen__', False):
-                raise FrozenInstanceError(f"cannot assign to/delete field {name!r}")
-            else:
-                getattr(object, fun)(self, name, *args, **kwargs)
+            _raise_if(f"cannot assign to/delete field {name!r}", getattr(self, '__frozen__', False))
+            getattr(object, fun)(self, name, *args, **kwargs)
 
         def init(self, *args, **kwargs):
             if args and hasattr(self, '__frozen__'):
@@ -404,11 +392,12 @@ class ArgSuite(Generic[ArgType]):
         if args:
             warnings.warn(f"Calling the patched constructor of {arg_class} with argv is deprecated, please use {arg_class}.__from_argv__ instead.")
             # TODO Exception handling with helpful error message
-            if (kwargs or len(args) > 2 or len(args) == 2 and args[1].__class__ not in (NoneType, str)
-                    or not (args[0] is None or isinstance(args[0], Sequence) and all(a.__class__ is str for a in args[0]))):
-                raise SmartArgError(f"Calling '{arg_class}(positional {args}, keyword {kwargs})' is not allowed:\n"
-                                    f"Only accept positional arguments to parse to the '{arg_class}'\n"
-                                    f"keyword arguments can only be used to create an instance directly.")
+            _raise_if(f"Calling '{arg_class}(positional {args}, keyword {kwargs})' is not allowed:\n"
+                      f"Only accept positional arguments to parse to the '{arg_class}'\n"
+                      f"keyword arguments can only be used to create an instance directly.",
+                      kwargs or len(args) > 2 or len(args) == 2 and args[1].__class__ not in (NoneType, str)
+                      or not (args[0] is None or isinstance(args[0], Sequence) and all(a.__class__ is str for a in args[0])))
+
             return arg_class.__from_argv__(args[0])
         else:
             return _get_type_proxy(arg_class).new_instance(arg_class, kwargs)
@@ -450,78 +439,66 @@ class ArgSuite(Generic[ArgType]):
         :raise: SmartArgError if the decorated argument class has non-typed field with defaults and such field
                 does not startswith "_" to overwrite the existing argument field property."""
         arg_fields = _annotations(arg_class).keys()
-        invalid_fields = list(filter(lambda s: s.endswith('_'), arg_fields))
-        if invalid_fields:
-            raise SmartArgError(f"'{arg_class}': found invalid (ending with '_') fields : {invalid_fields}.")
-        prefix = f'_{arg_class.__name__}__'
-        l_prefix = len(prefix)
+        invalid_fields = tuple(filter(lambda s: s.endswith('_'), arg_fields))
+        _raise_if(f"'{arg_class}': found invalid (ending with '_') fields : {invalid_fields}.", invalid_fields)
+        private_prefix = f'_{arg_class.__name__}__'
+        l_prefix = len(private_prefix)
         # skip callable methods and typed fields
         for f in [f for f in (vars(arg_class).keys()) if not callable(getattr(arg_class, f)) and f not in arg_fields]:
-            if f.startswith(prefix):
-                if f[l_prefix:] not in arg_fields:
-                    raise SmartArgError(f"'{arg_class}': there is no field '{f[l_prefix:]}' for '{f}' to override.")
-            elif not f.startswith('_'):
-                raise SmartArgError(f"'{arg_class}': found invalid (untyped) field '{f}'.")
+            is_private = f.startswith(private_prefix)
+            _raise_if(f"'{arg_class}': there is no field '{f[l_prefix:]}' for '{f}' to override.", is_private and f[l_prefix:] not in arg_fields)
+            _raise_if(f"'{arg_class}': found invalid (untyped) field '{f}'.", not (is_private or f.startswith('_')))
 
     def _gen_arguments_from_class(self, arg_class, prefix: str, parent_required, arg_classes: List, type_proxy) -> None:
         """Add argument to the self._parser for each field in the self._arg_class
         :raise: SmartArgError if cannot find corresponding handler for the argument type"""
         suite: ArgSuite = getattr(arg_class, '__arg_suite__', None)
-        if arg_class in arg_classes:
-            raise SmartArgError(f"Recursively nested argument class '{arg_class}' is not supported.")
-        elif not (suite and suite._arg_class is arg_class) and (hasattr(arg_class, '__post_init__')):
-            raise SmartArgError(f"Nested argument class '{arg_class}' with '__post_init__' expected to be decorated.")
-        else:
-            self._validate_fields(arg_class)
-            comments = _mro_all(arg_class, self.get_comments)
-            for raw_arg_name, arg_type in _annotations(arg_class).items():
-                arg_name = f'{prefix}{raw_arg_name}'
-                try:
-                    default = type_proxy.field_default(arg_class, raw_arg_name)
-                    sub_type_proxy = _get_type_proxy(arg_type)
-                    if sub_type_proxy:
-                        required = parent_required and default is MISSING
-                        arg_classes.append(arg_class)
-                        self._gen_arguments_from_class(arg_type, f'{arg_name}.', required, arg_classes, sub_type_proxy)
-                        arg_classes.pop()
-
-                        class ShouldNotSpecify:
-                            def __init__(self, name):
-                                self.name = name
-
-                            def __call__(self, _):
-                                raise SmartArgError(f"Nested argument '{self.name}' can not be directly specified")
-                        kwargs = KwargsType(required=False,
-                                            metavar='Help message only. Do NOT attempt to specify, or an exception will be raised.',
-                                            type=ShouldNotSpecify(arg_name),
-                                            help=f"""This is a placeholder for the nested argument '{arg_name}'.
-                                                 Its parent is {'' if parent_required else 'not'} required.
-                                                 {"It's required" if default is MISSING else f"Not required with default: {default}"},
-                                                 if the parent is being parsed.""")
-                        self._parser.add_argument(f'--{arg_name}', **vars(kwargs))
-                        self.handler_actions[arg_name] = None, default
-                    else:
-                        type_origin = get_origin(arg_type)
-                        type_args: tuple = get_args(arg_type)
-                        if type_origin == Union and len(type_args) == 2 and type_args[1] == NoneType:  # `Optional` support
-                            arg_type = type_args[0]  # Unwrap `Optional` and validate
-                            _raise_if(f"Optional field: {arg_name!r}={default!r} must default to `None` or `LateInit`", default not in (None, LateInit))
-                        handler = _first_handles(self.handlers, arg_type)
-                        field_meta = FieldMeta(comment=comments.get(raw_arg_name, ''), default=default, type=arg_type)
-                        kwargs = handler.gen_kwargs(field_meta)
-                        # apply user override to the argument object
-                        kwargs.__dict__.update(getattr(arg_class, f'_{arg_class.__name__}__{raw_arg_name}', {}))
-                        if hasattr(kwargs, 'choices'):
-                            logger.info(f"'{arg_name}': 'choices' {kwargs.choices} specified, removing 'metavar'.")
-                            del kwargs.metavar  # 'metavar' would override 'choices' which makes the help message less helpful
-                        if not parent_required and hasattr(kwargs, 'required'):
-                            del kwargs.required
-                        kwargs.default = MISSING  # Marker for fields absent from parsing
-                        logger.info(f"Adding kwargs {kwargs}")
-                        self.handler_actions[arg_name] = handler, self._parser.add_argument(f'--{arg_name}', **vars(kwargs))
-                except BaseException as b_e:
-                    logger.critical(f"Failed creating argument parser for {arg_name} with exception {b_e}.")
-                    raise
+        _raise_if(f"Recursively nested argument class '{arg_class}' is not supported.", arg_class in arg_classes)
+        _raise_if(f"Nested argument class '{arg_class}' with '__post_init__' expected to be decorated.",
+                  not (suite and suite._arg_class is arg_class) and hasattr(arg_class, '__post_init__'))
+        self._validate_fields(arg_class)
+        comments = _mro_all(arg_class, self.get_comments)
+        for raw_arg_name, arg_type in _annotations(arg_class).items():
+            arg_name = f'{prefix}{raw_arg_name}'
+            try:
+                default = type_proxy.field_default(arg_class, raw_arg_name)
+                sub_type_proxy = _get_type_proxy(arg_type)
+                if sub_type_proxy:
+                    required = parent_required and default is MISSING
+                    arg_classes.append(arg_class)
+                    self._gen_arguments_from_class(arg_type, f'{arg_name}.', required, arg_classes, sub_type_proxy)
+                    arg_classes.pop()
+                    kwargs = KwargsType(required=False,
+                                        metavar='Help message only. Do NOT attempt to specify, or an exception will be raised.',
+                                        type=lambda _: _raise_if(f"Nested argument {arg_name!r} can not be directly specified"),
+                                        help=f"""This is a placeholder for the nested argument '{arg_name}'.
+                                             Its parent is {'' if parent_required else 'not'} required.
+                                             {"It's required" if default is MISSING else f"Not required with default: {default}"},
+                                             if the parent is being parsed.""")
+                    self._parser.add_argument(f'--{arg_name}', **vars(kwargs))
+                    self.handler_actions[arg_name] = None, default
+                else:
+                    type_origin = get_origin(arg_type)
+                    type_args: tuple = get_args(arg_type)
+                    if type_origin == Union and len(type_args) == 2 and type_args[1] == NoneType:  # `Optional` support
+                        arg_type = type_args[0]  # Unwrap `Optional` and validate
+                        _raise_if(f"Optional field: {arg_name!r}={default!r} must default to `None` or `LateInit`", default not in (None, LateInit))
+                    handler = _first_handles(self.handlers, arg_type)
+                    field_meta = FieldMeta(comment=comments.get(raw_arg_name, ''), default=default, type=arg_type)
+                    kwargs = handler.gen_kwargs(field_meta)
+                    # apply user override to the argument object
+                    kwargs.__dict__.update(getattr(arg_class, f'_{arg_class.__name__}__{raw_arg_name}', {}))
+                    if hasattr(kwargs, 'choices'):
+                        logger.info(f"'{arg_name}': 'choices' {kwargs.choices} specified, removing 'metavar'.")
+                        del kwargs.metavar  # 'metavar' would override 'choices' which makes the help message less helpful
+                    if not parent_required and hasattr(kwargs, 'required'):
+                        del kwargs.required
+                    kwargs.default = MISSING  # Marker for fields absent from parsing
+                    logger.info(f"Adding kwargs {kwargs}")
+                    self.handler_actions[arg_name] = handler, self._parser.add_argument(f'--{arg_name}', **vars(kwargs))
+            except BaseException as b_e:
+                logger.critical(f"Failed creating argument parser for {arg_name} with exception {b_e}.")
+                raise
 
     @staticmethod
     def strip_argv(separator: str, argv: Optional[Sequence[str]] = None) -> Sequence[str]:
@@ -582,8 +559,7 @@ class ArgSuite(Generic[ArgType]):
             attr = getattr(arg, f)
             if _get_type_proxy(attr.__class__):
                 self.post_validation(attr)
-            if attr is LateInit:
-                raise SmartArgError(f"Field '{f}' is still not initialized after post processing for {arg_class}")
+            _raise_if(f"Field '{f}' is still not initialized after post processing for {arg_class}", attr is LateInit)
             arg_type = get_origin(t) or t
             if arg_type == get_origin(Optional[Any]):
                 arg_type = get_args(t)
@@ -592,8 +568,7 @@ class ArgSuite(Generic[ArgType]):
             except TypeError:  # best effort to check the instance type
                 logger.warning(f"Unable to check if {attr} is of type {t} for field {f} of argument class {arg_class}")
                 conforming = True
-            if not conforming:
-                raise SmartArgError(f"Field {f} has value of {attr} of type {attr.__class__} which is not of the expected type '{t}' for {arg_class}")
+            _raise_if(f"Field {f} has value of {attr} of type {attr.__class__} which is not of the expected type '{t}' for {arg_class}", not conforming)
 
     def _gen_cmd_argv(self, args: ArgType, prefix) -> Iterable[str]:
         proxy = _get_type_proxy(args.__class__)

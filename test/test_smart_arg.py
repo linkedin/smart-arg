@@ -341,7 +341,7 @@ def test_dataclass():
     pytest.raises(AssertionError, Params.__from_argv__, argv, error_on_unknown=False)
     args: Params = Params.__from_argv__(argv + ['--label', 'bluh'], error_on_unknown=False)
     pytest.raises(AssertionError, Params, sample_id='uid', action='no_such_action')
-    pytest.raises(FrozenInstanceError, args.__post_init__)  # mutation not allowed after init
+    pytest.raises(SmartArgError, args.__post_init__)  # mutation not allowed after init
     object.__delattr__(args, '__frozen__')
     args.__post_init__()  # mutation allowed after '__frozen__` mark removed
     assert args == Params(sample_id='uid',  sample_weight='weight', label='bluh')
@@ -354,7 +354,7 @@ def test_dataclass():
             self.frozen = False
         frozen: bool = True
 
-    pytest.raises(FrozenInstanceError, NoPostInit().mutate)  # mutation not allowed after init
+    pytest.raises(SmartArgError, NoPostInit().mutate)  # mutation not allowed after init
 
 
 def test_basic_enum():
@@ -376,14 +376,13 @@ def test_basic_enum():
     basic_tup = MyEnumBasic(a_int=1, my_color_dict={10: Color.RED, 20: Color.BLUE}, my_color_list=[Color.GREEN],
                             my_color_tuple=(Color.BLUE, 100), default_color=Color.GREEN)
 
-    parsed_tup:MyEnumBasic = MyEnumBasic.__from_argv__(arg_cmd)
+    parsed_tup: MyEnumBasic = MyEnumBasic.__from_argv__(arg_cmd)
     assert basic_tup == parsed_tup
-    seriliazed_cmd_line = basic_tup.__to_argv__()
-    assert set(seriliazed_cmd_line) == set(arg_cmd)
+    serialized_cmd_line = basic_tup.__to_argv__()
+    assert set(serialized_cmd_line) == set(arg_cmd)
     my_parser = MyEnumBasic.__arg_suite__._parser
     assert my_parser._option_string_actions['--my_color_dict'].metavar == "int:<enum 'Color'>"
-    assert my_parser._option_string_actions['--default_color'].choices == list(Color)
+    assert my_parser._option_string_actions['--default_color'].choices == Color
 
-    arg_cmd2 = ['--a_int', '1', '--my_color_dict', '10:red', '--my_color_list', 'GREEN', '--my_color_tuple', 'BLUE',
-                '100']
+    arg_cmd2 = ['--a_int', '1', '--my_color_dict', '10:red', '--my_color_list', 'GREEN', '--my_color_tuple', 'BLUE', '100']
     pytest.raises(SmartArgError, MyEnumBasic.__from_argv__, arg_cmd2)
