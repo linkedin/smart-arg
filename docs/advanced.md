@@ -52,12 +52,12 @@ allowed after construction, including manually calling `__post_init__`.
 ## Advanced Usages
 
 By default, `smart-arg` supports the following types as fields of an argument class:
-* primitives: `int`, `float`, `bool`, `str`
+* primitives: `int`, `float`, `bool`, `str`, `enum.Enum`
 * `Tuple`: elements of the tuple are expected to be primitives
-* `List`/`Set`: `List[int]`, `List[float]`, `List[bool]`, `List[str]`, `Set[int]`, `Set[float]`, `Set[bool]`, `Set[str]`
+* `List`/`Set`: `List[int]`, `List[float]`, `List[bool]`, `List[str]`, `List[enum.Enum]`, `Set[int]`, `Set[float]`, `Set[bool]`, `Set[str]`, `Set[enum.Enum]`
 * `Dict`: `Dict[int, int]`, `Dict[int, float]`, `Dict[int, bool]`, `Dict[int, str]`, `Dict[float, int]`, `Dict[float, float]`, 
 `Dict[float, bool]`, `Dict[float, str]`, `Dict[bool, int]`, `Dict[bool, float]`, `Dict[bool, bool]`, `Dict[bool, str]`, 
-`Dict[str, int]`, `Dict[str, float]`, `Dict[str, bool]`, `Dict[str, str]`
+`Dict[str, int]`, `Dict[str, float]`, `Dict[str, bool]`, `Dict[str, str]`, `Dict[enum.Enum, int/float/bool/str]`, `Dict[int/float/bool/str, enum.Enum]`
 * `Optional[AnyOtherSupportedType]`: Beware that any optional field is required to **default to `None`**.
 
 ### override argument fields
