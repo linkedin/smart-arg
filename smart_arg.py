@@ -244,7 +244,6 @@ class PrimitiveHandler(TypeHandler):
         return _first_handles(self.primitive_addons, t, False)
 
     def _build_other(self, kwargs: KwargsType, arg_type: Type) -> None:
-        super()._build_other(kwargs, arg_type)
         addon = _first_handles(self.primitive_addons, arg_type)
         kwargs.type = addon.build_type(arg_type)
         kwargs.metavar = addon.build_metavar(arg_type)
@@ -267,11 +266,6 @@ class TupleHandler(TypeHandler):
             return _first_handles(self.p_addons, t).build_type(t)(s)
 
     def _build_other(self, kwargs: KwargsType, arg_type: Type) -> None:
-        """Build other information for the keyword argument KwargsType object
-
-        :param kwargs: the keyword argument KwargsType object
-        :param arg_type: the type of the argument extracted from NamedTuple (Tuple type)"""
-        super()._build_other(kwargs, arg_type)
         # get the tuple element types
         types = get_args(arg_type)
         kwargs.nargs = len(types)
@@ -284,10 +278,6 @@ class TupleHandler(TypeHandler):
 
 class CollectionHandler(TypeHandler):
     def _build_other(self, kwargs: KwargsType, arg_type: Type) -> None:
-        """Build other information for the keyword argument KwargsType object
-
-        :param kwargs: the keyword argument KwargsType object
-        :param arg_type: the type of the argument extracted from the argument class (List/Set type)"""
         kwargs.nargs = '*'
         unboxed_type = get_args(arg_type)[0]
         addon = _first_handles(self.primitive_addons, unboxed_type)
@@ -299,20 +289,17 @@ class CollectionHandler(TypeHandler):
         return len(args) == 1 and get_origin(t) in (list, set) and _first_handles(self.primitive_addons, args[0], False)
 
 
-class DictHandler(CollectionHandler):
+class DictHandler(TypeHandler):
     def _build_other(self, kwargs, arg_type) -> None:
-        """Build other information for the keyword argument KwargsType object
+        kwargs.nargs = '*'
+        arg_types = get_args(arg_type)
+        addon_method = lambda type, method: getattr(_first_handles(self.primitive_addons, type), method)(type)  # Find the addon for a type and a method
+        kv_apply = lambda method: (addon_method(arg_types[0], method), addon_method(arg_types[1], method))  # Apply the same method on a k/v pair of types
+        k_type, v_type = kv_apply('build_type')
 
-        :param kwargs: the keyword argument KwargsType object
-        :param arg_type: the type of the argument extracted from the argument class (Dict type)"""
         def dict_type(s: str):
             k, v = s.split(":")
-            return k_t(k), v_t(v)
-        super()._build_other(kwargs, arg_type)
-        arg_types = get_args(arg_type)
-        kv_addon = lambda type, method: getattr(_first_handles(self.primitive_addons, type), method)(type)
-        kv_apply = lambda method: (kv_addon(arg_types[0], method), kv_addon(arg_types[1], method))
-        k_t, v_t = kv_apply('build_type')
+            return k_type(k), v_type(v)
         kwargs.type = dict_type
         k, v = kv_apply('build_metavar')
         kwargs.metavar = f'{k}:{v}'
