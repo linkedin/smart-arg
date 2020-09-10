@@ -550,9 +550,9 @@ class ArgSuite(Generic[ArgType]):
             attr = getattr(arg, name)
             _raise_if(f"Field '{name}' is still not initialized after post processing for {arg_class}", attr is LateInit)
             attr_class = attr.__class__
-            if _get_type_proxy(t):
-                conforming = attr_class is NoneType and NoneType in get_args(t) or attr_class is t
-                _raise_if(f"Field {name} has value of {attr} of type {attr_class} which is not of the expected type '{t}' for {arg_class}", not conforming)
+            type_origin, type_args = get_origin(t), get_args(t)
+            if _get_type_proxy(t) or type_origin == Union and len(type_args) == 2 and type_args[1] == NoneType and _get_type_proxy(type_args[0]):
+                _raise_if(f"Field {name}' value of {attr}:{attr_class} is not of the expected type '{t}' for {arg_class}", attr_class not in (t, *type_args))
                 self.post_validation(attr, f'{prefix}{name}.')
             else:
                 arg_type = get_origin(t) or t

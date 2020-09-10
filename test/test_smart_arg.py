@@ -11,7 +11,7 @@ from contextlib import redirect_stderr
 
 import pytest
 
-from smart_arg import arg_suite, custom_arg_suite, LateInit, SmartArgError, TypeHandler, _first_handles
+from smart_arg import arg_suite, custom_arg_suite, LateInit, SmartArgError, TypeHandler, _first_handles, PrimitiveHandlerAddon
 from smart_arg_mock import main, MockArgTup
 
 
@@ -196,7 +196,7 @@ def test_argv():
 
 
 def test_primitive_addon():
-    class IntHandlerAddon:
+    class IntHandlerAddon(PrimitiveHandlerAddon):
         @staticmethod
         def build_type(arg_type) -> Any:
             return lambda s: int(s) ** 2
@@ -250,7 +250,7 @@ def test_nested():
     @arg_suite
     class Nested(NamedTuple):
         a_int: int
-        nested: MyTupBasic = my_tup_basic  # nested
+        nested: Optional[MyTupBasic] = None  # Optional nested
         another_int: int = 0
         another_nested: MyTup = MyTup()
 
@@ -259,7 +259,8 @@ def test_nested():
     argv = nested.__to_argv__()
     assert Nested(argv) == nested
     assert Nested(argv[0:2]) == nested
-    pytest.raises(SmartArgError, Nested, ['--a_int', '0', '--nested', 'raise'])
+    pytest.raises(SmartArgError, Nested, ['--a_int', '0', '--nested', 'Not Allowed'])
+    pytest.raises(SmartArgError, Nested, a_int=0, nested='Not nested MyTupBasic')
 
     class NotDecoratedWithPost(NamedTuple):
         def __post_init__(self): pass
@@ -275,8 +276,7 @@ def test_nested():
 
 def test_cli_execution():
     demo = f'{sys.executable if sys.executable else "python"} {os.path.join(os.path.dirname(__file__), "smart_arg_demo.py")}'
-    args = '--nn 200 300 --a_tuple s 5 --encoder fastText --h_param y:1 n:0 --nested.n_nested.n_' \
-           'name "nested name" --embedding_dim 100 --lr 0.001'
+    args = '--nn 200 300 --a_tuple s 5 --encoder fastText --h_param y:1 n:0 --nested.n_nested.n_name "nested name" --embedding_dim 100 --lr 0.001'
     arg_line = demo + ' ' + args
     kwargs = {'stdout': subprocess.PIPE, 'stderr': subprocess.PIPE, 'shell': True}
     completed_process = subprocess.run(arg_line, **kwargs)
