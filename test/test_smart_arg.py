@@ -60,7 +60,7 @@ def test_basic_parse_to_arg():
     serialized_cmd_line = my_tup_basic.__to_argv__(separator=None)
     assert set(serialized_cmd_line) == set(arg_cmd.split())
     my_parser = MyTupBasic.__arg_suite__._parser
-    assert my_parser._option_string_actions['--c_optional_float'].help == '(Optional[float], default: None) '
+    assert my_parser._option_string_actions['--c_optional_float'].help == '(Optional[float]; default: None) '
     assert my_parser._option_string_actions['--a_int'].help == '(int; required)  a is int'
     assert my_parser._option_string_actions['--a_float'].help == '(float; required)  a is float'
     assert my_parser._option_string_actions['--a_str'].choices == ['hello', 'bonjour', 'hola']
@@ -84,7 +84,7 @@ def test_optional():
 
     with muted:
         pytest.raises(SystemExit, MyTup.__from_argv__, ['--ints', 'None'])
-    assert MyTup.__arg_suite__._parser._option_string_actions['--ints'].help == '(Optional[List[int]], default: None) '
+    assert MyTup.__arg_suite__._parser._option_string_actions['--ints'].help == '(Optional[List[int]]; default: None) '
     assert MyTup.__from_argv__([]).ints is None
     assert MyTup.__from_argv__(['--ints', '1', '2']).ints == [1, 2]
     assert MyTup.__from_argv__(['--ints']).ints == []

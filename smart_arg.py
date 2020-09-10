@@ -194,7 +194,7 @@ class TypeHandler:
             help_builder.append('; required')
         else:
             # Only add default to the help message for informational purpose. The default is set when creating the argument class instance.
-            help_builder.append(', default: ')
+            help_builder.append('; default: ')
             help_builder.append(str(field_meta.default))
 
         help_builder.append(') ')
@@ -467,10 +467,12 @@ class ArgSuite(Generic[ArgType]):
                     handler = _first_handles(self.handlers, arg_type)
                     field_meta = FieldMeta(comment=comments.get(raw_arg_name, ''), default=default, type=arg_type, optional=optional)
                     kwargs = handler.gen_kwargs(field_meta)
-                    # apply user override to the argument object
-                    kwargs.__dict__.update(getattr(arg_class, f'_{arg_class.__name__}__{raw_arg_name}', {}))
-                    if not parent_required and hasattr(kwargs, 'required'):
-                        del kwargs.required
+                    user_override: dict = getattr(arg_class, f'_{arg_class.__name__}__{raw_arg_name}', {})
+                    if user_override.get('choices', None):
+                        logger.info(f"Instead of defining `choices`, please consider using Enum for {arg_name}")
+                    kwargs.__dict__.update(user_override)  # apply user override to the keyword argument object
+                    if not parent_required:
+                        setattr(kwargs, 'required', None)  # Adjust required
                     kwargs.default = MISSING  # Marker for fields absent from parsing
                     logger.debug(f"Adding kwargs {kwargs}")
                     self.handler_actions[arg_name] = handler, self._parser.add_argument(f'--{arg_name}', **vars(kwargs))
