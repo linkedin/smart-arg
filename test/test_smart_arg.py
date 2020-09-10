@@ -11,7 +11,7 @@ from contextlib import redirect_stderr
 
 import pytest
 
-from smart_arg import arg_suite, custom_arg_suite, LateInit, SmartArgError, TypeHandler, _first_handles
+from smart_arg import arg_suite, custom_arg_suite, LateInit, SmartArgError, TypeHandler, _first_handles, PrimitiveHandlerAddon
 from smart_arg_mock import main, MockArgTup
 
 
@@ -60,8 +60,9 @@ def test_basic_parse_to_arg():
     serialized_cmd_line = my_tup_basic.__to_argv__(separator=None)
     assert set(serialized_cmd_line) == set(arg_cmd.split())
     my_parser = MyTupBasic.__arg_suite__._parser
-    assert my_parser._option_string_actions['--a_int'].help == '(int, required)  a is int'
-    assert my_parser._option_string_actions['--a_float'].help == '(float, required)  a is float'
+    assert my_parser._option_string_actions['--c_optional_float'].help == '(Optional[float], default: None) '
+    assert my_parser._option_string_actions['--a_int'].help == '(int; required)  a is int'
+    assert my_parser._option_string_actions['--a_float'].help == '(float; required)  a is float'
     assert my_parser._option_string_actions['--a_str'].choices == ['hello', 'bonjour', 'hola']
 
     parsed_arg = MyTupBasic(arg_cmd.split())
@@ -72,7 +73,8 @@ muted = redirect_stderr(SimpleNamespace(write=lambda *_: None))
 
 
 def test_parse_error():
-    with muted: pytest.raises(SystemExit, MyTupBasic.__from_argv__, [])
+    with muted:
+        pytest.raises(SystemExit, MyTupBasic.__from_argv__, [])
 
 
 def test_optional():
@@ -80,7 +82,9 @@ def test_optional():
     class MyTup(NamedTuple):
         ints: Optional[List[int]] = None
 
-    with muted: pytest.raises(SystemExit, MyTup.__from_argv__, ['--ints', 'None'])
+    with muted:
+        pytest.raises(SystemExit, MyTup.__from_argv__, ['--ints', 'None'])
+    assert MyTup.__arg_suite__._parser._option_string_actions['--ints'].help == '(Optional[List[int]], default: None) '
     assert MyTup.__from_argv__([]).ints is None
     assert MyTup.__from_argv__(['--ints', '1', '2']).ints == [1, 2]
     assert MyTup.__from_argv__(['--ints']).ints == []
@@ -183,7 +187,7 @@ def test_argv():
         e_dict_str_int={'size': 32, 'area': 90}
     )
     cmd_line = expected_arg.__to_argv__()
-    with unittest.mock.patch('sys.argv', ['mock'] + cmd_line):
+    with unittest.mock.patch('sys.argv', ('mock',) + cmd_line):
         parsed = main(sys.argv[1:])
         parsed_factory = MockArgTup.__from_argv__()
 
@@ -192,7 +196,7 @@ def test_argv():
 
 
 def test_primitive_addon():
-    class IntHandlerAddon:
+    class IntHandlerAddon(PrimitiveHandlerAddon):
         @staticmethod
         def build_type(arg_type) -> Any:
             return lambda s: int(s) ** 2
@@ -220,7 +224,7 @@ def test_primitive_addon():
     class MyTuple(NamedTuple):
         a_int: int
 
-    argv = ['--a_int', '3']
+    argv = ('--a_int', '3')
     tup = MyTuple.__from_argv__(argv)
     assert tup.a_int == 9
     assert tup.__to_argv__() == argv
@@ -246,7 +250,7 @@ def test_nested():
     @arg_suite
     class Nested(NamedTuple):
         a_int: int
-        nested: MyTupBasic = my_tup_basic  # nested
+        nested: Optional[MyTupBasic] = None  # Optional nested
         another_int: int = 0
         another_nested: MyTup = MyTup()
 
@@ -255,7 +259,8 @@ def test_nested():
     argv = nested.__to_argv__()
     assert Nested(argv) == nested
     assert Nested(argv[0:2]) == nested
-    pytest.raises(SmartArgError, Nested, ['--a_int', '0', '--nested', 'raise'])
+    pytest.raises(SmartArgError, Nested, ['--a_int', '0', '--nested', 'Not Allowed'])
+    pytest.raises(SmartArgError, Nested, a_int=0, nested='Not nested MyTupBasic')
 
     class NotDecoratedWithPost(NamedTuple):
         def __post_init__(self): pass
@@ -271,11 +276,11 @@ def test_nested():
 
 def test_cli_execution():
     demo = f'{sys.executable if sys.executable else "python"} {os.path.join(os.path.dirname(__file__), "smart_arg_demo.py")}'
-    args = '--nn 200 300 --a_tuple s 5 --encoder fastText --h_param y:1 n:0 --nested.n_nested.n_' \
-           'name "nested name" --embedding_dim 100 --lr 0.001'
+    args = '--nn 200 300 --a_tuple s 5 --encoder fastText --h_param y:1 n:0 --nested.n_nested.n_name "nested name" --embedding_dim 100 --lr 0.001'
     arg_line = demo + ' ' + args
     kwargs = {'stdout': subprocess.PIPE, 'stderr': subprocess.PIPE, 'shell': True}
     completed_process = subprocess.run(arg_line, **kwargs)
+    assert completed_process.stderr == b''
     assert completed_process.returncode == 0
 
     completed_process = subprocess.run(arg_line + ' --adp False', **kwargs)
@@ -344,14 +349,15 @@ def test_dataclass():
     pytest.raises(SmartArgError, args.__post_init__)  # mutation not allowed after init
     object.__delattr__(args, '__frozen__')
     args.__post_init__()  # mutation allowed after '__frozen__` mark removed
-    assert args == Params(sample_id='uid',  sample_weight='weight', label='bluh')
-    assert args.__to_argv__() == ['--sample_id', 'uid', '--sample_weight', 'weight', '--label', 'bluh']
+    assert args == Params(sample_id='uid', sample_weight='weight', label='bluh')
+    assert args.__to_argv__() == ('--sample_id', 'uid', '--sample_weight', 'weight', '--label', 'bluh')
 
     @arg_suite
     @dataclass
     class NoPostInit:
         def mutate(self):
             self.frozen = False
+
         frozen: bool = True
 
     pytest.raises(SmartArgError, NoPostInit().mutate)  # mutation not allowed after init
@@ -381,7 +387,7 @@ def test_basic_enum():
     serialized_cmd_line = basic_tup.__to_argv__()
     assert set(serialized_cmd_line) == set(arg_cmd)
     my_parser = MyEnumBasic.__arg_suite__._parser
-    assert my_parser._option_string_actions['--my_color_dict'].metavar == "int:<enum 'Color'>"
+    assert my_parser._option_string_actions['--my_color_dict'].metavar == "int:{RED, BLUE, GREEN}"
     assert my_parser._option_string_actions['--default_color'].choices == Color
 
     arg_cmd2 = ['--a_int', '1', '--my_color_dict', '10:red', '--my_color_list', 'GREEN', '--my_color_tuple', 'BLUE', '100']

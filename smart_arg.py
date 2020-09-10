@@ -67,7 +67,6 @@ __all__ = (
 
 import logging
 import os
-import re
 import sys
 import tokenize
 import warnings
@@ -78,9 +77,7 @@ from enum import EnumMeta, Enum
 
 ArgType = TypeVar('ArgType', bound=NamedTuple)  # NamedTuple is not a real class bound, but setting `bound` to NamedTuple makes mypy happier
 NoneType = None.__class__
-FieldMeta = NamedTuple('FieldMeta', (('comment', str), ('default', Any), ('type', Type)))
-
-RESTORE_OPTIONAL = re.compile('Union\\[([^,]+), NoneType\\]')
+FieldMeta = NamedTuple('FieldMeta', (('comment', str), ('default', Any), ('type', Type), ('optional', bool)))
 
 logger = logging.getLogger(__name__)
 SMART_ARG_LOG_LEVEL = 'SMART_ARG_LOG_LEVEL'
@@ -97,7 +94,7 @@ if sys.version_info >= (3, 7):
 elif sys.version_info >= (3, 6):
     # Python == 3.6.x. Defining the back-ported get_origin, get_args
     # 3.6 `List.__origin__ == List`, `Optional` does not have `__dict__`
-    get_origin, get_args = lambda tp: getattr(tp, '__extra__', ()) or getattr(tp, '__origin__', None), lambda tp: getattr(tp, '__args__', ())
+    get_origin, get_args = lambda tp: getattr(tp, '__extra__', ()) or getattr(tp, '__origin__', None), lambda tp: getattr(tp, '__args__', ()) or []
 else:
     try:
         warnings.warn(f"Unsupported and untested python version {sys.version_info} < 3.6. "
@@ -129,7 +126,7 @@ class SmartArgError(Exception):  # TODO Extend to better represent different typ
     """Base exception for smart-arg."""
 
 
-def _raise_if(message: str, condition=True):
+def _raise_if(message: str, condition: Any = True):
     if condition:
         raise SmartArgError(message)
 
@@ -156,9 +153,22 @@ class PrimitiveHandlerAddon:
 
         :param arg: The argument
         :type arg: Any type that is supported by this class
-        :return: The string serialization of `arg`
-        """
+        :return: The string serialization of `arg`"""
         return str(arg.name) if isinstance(arg, Enum) else str(arg)
+
+    @staticmethod
+    def build_metavar(arg_type: Type) -> str:
+        """Define the hint string in argument help message for `arg_type`."""
+        return '{True, False}' if arg_type == bool else \
+            f"{{{', '.join(str(c) for c in arg_type._member_names_)}}}" if type(arg_type) == EnumMeta else \
+            arg_type.__name__
+
+    @staticmethod
+    def build_choices(arg_type) -> Optional[Iterable[Any]]:
+        """Enumerate `arg_type` if possible, or return `None`."""
+        return (True, False) if arg_type == bool else \
+            arg_type if type(arg_type) == EnumMeta else \
+            None
 
     @staticmethod
     def handles(t: Type) -> bool:
@@ -177,11 +187,11 @@ class TypeHandler:
         :param field_meta: the meta information extracted from the NamedTuple class"""
         # Build help message
         arg_type = field_meta.type
-        help_builder = ['(', self._type_to_str(arg_type)]
+        help_builder = ['(', 'Optional[' if field_meta.optional else '', self._type_to_str(arg_type), ']' if field_meta.optional else '']
         # Get default if specified and set required if no default
         if field_meta.default is MISSING:
             kwargs.required = True
-            help_builder.append(', required')
+            help_builder.append('; required')
         else:
             # Only add default to the help message for informational purpose. The default is set when creating the argument class instance.
             help_builder.append(', default: ')
@@ -197,7 +207,6 @@ class TypeHandler:
 
         :param kwargs: the keyword argument KwargsType object
         :param arg_type: the type of the argument extracted from NamedTuple (primitive types)"""
-        kwargs.metavar = self._type_to_str(arg_type)
 
     def gen_kwargs(self, field_meta: FieldMeta) -> KwargsType:
         """Build keyword argument object KwargsType
@@ -219,15 +228,12 @@ class TypeHandler:
         args = (arg,) if isinstance(arg, str) or not isinstance(arg, Iterable) else arg
         yield from (_first_handles(self.primitive_addons, type(arg)).build_str(arg) for arg in args)
 
-    @staticmethod
-    def _type_to_str(t: Union[type, Type]) -> str:
-        """Convert type to string
-        Note: Optional field shows as Union when getting type, i.e. Optional[int] -> Union[int, NoneType].
-        So the method is expected to return the restored type which is Optional[int].
+    def _type_to_str(self, t: Union[type, Type]) -> str:
+        """Convert type to string for ArgumentParser help message
 
-        :param t: type of the argument, i.e. float, typing.Dict[str, int], typing.Set[int], typing.List[str] etc.
+        :param t: type of the argument, i.e. float, Dict[str, int], Set[int], List[str] etc.
         :return: string representation of the argument type"""
-        return t.__name__ if type(t) == type else RESTORE_OPTIONAL.sub('Optional[\\1]', str(t).replace('typing.', ''))
+        return f'{getattr(t, "_name", "") or t.__name__}[{", ".join(a.__name__ for a in get_args(t))}]'
 
     def handles(self, t: Type) -> bool:
         raise NotImplementedError
@@ -238,11 +244,13 @@ class PrimitiveHandler(TypeHandler):
         return _first_handles(self.primitive_addons, t, False)
 
     def _build_other(self, kwargs: KwargsType, arg_type: Type) -> None:
-        super()._build_other(kwargs, arg_type)
-        kwargs.type = _first_handles(self.primitive_addons, arg_type).build_type(arg_type)
-        kwargs.choices = (True, False) if arg_type == bool else \
-            arg_type if type(arg_type) == EnumMeta else \
-            None
+        addon = _first_handles(self.primitive_addons, arg_type)
+        kwargs.type = addon.build_type(arg_type)
+        kwargs.metavar = addon.build_metavar(arg_type)
+        kwargs.choices = addon.build_choices(arg_type)
+
+    def _type_to_str(self, t: Union[type, Type]) -> str:
+        return t.__name__
 
 
 class TupleHandler(TypeHandler):
@@ -258,55 +266,43 @@ class TupleHandler(TypeHandler):
             return _first_handles(self.p_addons, t).build_type(t)(s)
 
     def _build_other(self, kwargs: KwargsType, arg_type: Type) -> None:
-        """Build other information for the keyword argument KwargsType object
-
-        :param kwargs: the keyword argument KwargsType object
-        :param arg_type: the type of the argument extracted from NamedTuple (Tuple type)"""
-        super()._build_other(kwargs, arg_type)
         # get the tuple element types
         types = get_args(arg_type)
-        _raise_if(f'Invalid Tuple type: {arg_type}', not types)
         kwargs.nargs = len(types)
-        kwargs.metavar = tuple(self._type_to_str(t) for t in types)
+        kwargs.metavar = tuple(_first_handles(self.primitive_addons, t).build_metavar(t) for t in types)
         kwargs.type = TupleHandler.__BuildType(types, self.primitive_addons)
 
     def handles(self, t: Type) -> bool:
-        return get_origin(t) == tuple
+        return get_origin(t) == tuple and get_args(t)  # type: ignore
 
 
 class CollectionHandler(TypeHandler):
     def _build_other(self, kwargs: KwargsType, arg_type: Type) -> None:
-        """Build other information for the keyword argument KwargsType object
-
-        :param kwargs: the keyword argument KwargsType object
-        :param arg_type: the type of the argument extracted from the argument class (List/Set type)"""
-        self.arg_types: Tuple[Type, ...] = get_args(arg_type)
-        self.unboxed_type = self.arg_types[0]
-        kwargs.metavar = self._type_to_str(self.unboxed_type)
         kwargs.nargs = '*'
-        kwargs.type = _first_handles(self.primitive_addons, self.unboxed_type).build_type(self.unboxed_type)
+        unboxed_type = get_args(arg_type)[0]
+        addon = _first_handles(self.primitive_addons, unboxed_type)
+        kwargs.metavar = addon.build_metavar(unboxed_type)
+        kwargs.type = addon.build_type(unboxed_type)
 
     def handles(self, t: Type) -> bool:
         args = get_args(t)
         return len(args) == 1 and get_origin(t) in (list, set) and _first_handles(self.primitive_addons, args[0], False)
 
 
-class DictHandler(CollectionHandler):
+class DictHandler(TypeHandler):
     def _build_other(self, kwargs, arg_type) -> None:
-        """Build other information for the keyword argument KwargsType object
+        kwargs.nargs = '*'
+        arg_types = get_args(arg_type)
+        addon_method = lambda type, method: getattr(_first_handles(self.primitive_addons, type), method)(type)  # Find the addon for a type and a method
+        kv_apply = lambda method: (addon_method(arg_types[0], method), addon_method(arg_types[1], method))  # Apply the same method on a k/v pair of types
+        k_type, v_type = kv_apply('build_type')
 
-        :param kwargs: the keyword argument KwargsType object
-        :param arg_type: the type of the argument extracted from the argument class (Dict type)"""
-        super()._build_other(kwargs, arg_type)
-        arg_types = self.arg_types
-
-        def type_fun(s: str, types=arg_types):
+        def dict_type(s: str):
             k, v = s.split(":")
-            type_builder = lambda t: _first_handles(self.primitive_addons, t).build_type(t)
-            return type_builder(types[0])(k), type_builder(types[1])(v)
-
-        kwargs.type = type_fun
-        kwargs.metavar = f'{self._type_to_str(arg_types[0])}:{self._type_to_str(arg_types[1])}'
+            return k_type(k), v_type(v)
+        kwargs.type = dict_type
+        k, v = kv_apply('build_metavar')
+        kwargs.metavar = f'{k}:{v}'
 
     def gen_cli_arg(self, action: Action, arg):
         yield action.option_strings[0]
@@ -393,8 +389,7 @@ class ArgSuite(Generic[ArgType]):
             warnings.warn(f"Calling the patched constructor of {arg_class} with argv is deprecated, please use {arg_class}.__from_argv__ instead.")
             # TODO Exception handling with helpful error message
             _raise_if(f"Calling '{arg_class}(positional {args}, keyword {kwargs})' is not allowed:\n"
-                      f"Only accept positional arguments to parse to the '{arg_class}'\n"
-                      f"keyword arguments can only be used to create an instance directly.",
+                      f"Only accept positional arguments to parse to the '{arg_class}'\nkeyword arguments can only be used to create an instance directly.",
                       kwargs or len(args) > 2 or len(args) == 2 and args[1].__class__ not in (NoneType, str)
                       or not (args[0] is None or isinstance(args[0], Sequence) and all(a.__class__ is str for a in args[0])))
 
@@ -402,23 +397,11 @@ class ArgSuite(Generic[ArgType]):
         else:
             return _get_type_proxy(arg_class).new_instance(arg_class, kwargs)
 
-    def __init__(self, type_handlers: List[Type[TypeHandler]] = None, primitive_handler_addons: List[Type[PrimitiveHandlerAddon]] = None) -> None:
-        addons = [PrimitiveHandlerAddon]
-        if primitive_handler_addons:
-            addons += primitive_handler_addons
-        handler_types = [PrimitiveHandler, CollectionHandler, DictHandler, TupleHandler]
-        if type_handlers:
-            handler_types += type_handlers
-        primitives = tuple(reversed(addons))
-        handler_list = tuple(handler(primitives) for handler in handler_types)
-        self.handlers = tuple(reversed(handler_list))
-
-    def __call__(self, arg_class):
+    def __init__(self, type_handlers: Sequence[TypeHandler], arg_class):
         type_proxy = _get_type_proxy(arg_class)
         _raise_if(f"Unsupported argument class {arg_class}.", not type_proxy)
-
+        self.handlers = type_handlers
         self.handler_actions: Dict[str, Union[Tuple[TypeHandler, Action], Tuple[None, Any]]] = {}
-
         type_proxy.patch(arg_class)
         #  A big assumption here is that the argument classes never override __new__
         if not hasattr(arg_class, '__original_new__'):
@@ -428,10 +411,9 @@ class ArgSuite(Generic[ArgType]):
         arg_class.__from_argv__ = self.parse_to_arg
         arg_class.__arg_suite__ = self
         self._arg_class = arg_class
-        self._parser = ArgumentParser(description=self._arg_class.__doc__, argument_default=MISSING, fromfile_prefix_chars='@')
-        self._parser.convert_arg_line_to_args = lambda arg_line: arg_line.split()
+        self._parser = ArgumentParser(description=self._arg_class.__doc__, argument_default=MISSING, fromfile_prefix_chars='@')  # type: ignore
+        self._parser.convert_arg_line_to_args = lambda arg_line: arg_line.split()  # type: ignore
         self._gen_arguments_from_class(self._arg_class, '', True, [], type_proxy)
-        return arg_class
 
     def _validate_fields(self, arg_class: Type) -> None:
         """Validate fields in `arg_class`.
@@ -462,6 +444,10 @@ class ArgSuite(Generic[ArgType]):
             arg_name = f'{prefix}{raw_arg_name}'
             try:
                 default = type_proxy.field_default(arg_class, raw_arg_name)
+                type_origin, type_args, optional = get_origin(arg_type), get_args(arg_type), False
+                if type_origin == Union and len(type_args) == 2 and type_args[1] == NoneType:  # `Optional` support
+                    arg_type, optional = type_args[0], True  # Unwrap `Optional` and validate
+                    _raise_if(f"Optional field: {arg_name!r}={default!r} must default to `None` or `LateInit`", default not in (None, LateInit))
                 sub_type_proxy = _get_type_proxy(arg_type)
                 if sub_type_proxy:
                     required = parent_required and default is MISSING
@@ -478,26 +464,18 @@ class ArgSuite(Generic[ArgType]):
                     self._parser.add_argument(f'--{arg_name}', **vars(kwargs))
                     self.handler_actions[arg_name] = None, default
                 else:
-                    type_origin = get_origin(arg_type)
-                    type_args: tuple = get_args(arg_type)
-                    if type_origin == Union and len(type_args) == 2 and type_args[1] == NoneType:  # `Optional` support
-                        arg_type = type_args[0]  # Unwrap `Optional` and validate
-                        _raise_if(f"Optional field: {arg_name!r}={default!r} must default to `None` or `LateInit`", default not in (None, LateInit))
                     handler = _first_handles(self.handlers, arg_type)
-                    field_meta = FieldMeta(comment=comments.get(raw_arg_name, ''), default=default, type=arg_type)
+                    field_meta = FieldMeta(comment=comments.get(raw_arg_name, ''), default=default, type=arg_type, optional=optional)
                     kwargs = handler.gen_kwargs(field_meta)
                     # apply user override to the argument object
                     kwargs.__dict__.update(getattr(arg_class, f'_{arg_class.__name__}__{raw_arg_name}', {}))
-                    if hasattr(kwargs, 'choices'):
-                        logger.info(f"'{arg_name}': 'choices' {kwargs.choices} specified, removing 'metavar'.")
-                        del kwargs.metavar  # 'metavar' would override 'choices' which makes the help message less helpful
                     if not parent_required and hasattr(kwargs, 'required'):
                         del kwargs.required
                     kwargs.default = MISSING  # Marker for fields absent from parsing
-                    logger.info(f"Adding kwargs {kwargs}")
+                    logger.debug(f"Adding kwargs {kwargs}")
                     self.handler_actions[arg_name] = handler, self._parser.add_argument(f'--{arg_name}', **vars(kwargs))
             except BaseException as b_e:
-                logger.critical(f"Failed creating argument parser for {arg_name} with exception {b_e}.")
+                logger.critical(f"Failed creating argument parser for {arg_name!r}:{arg_type!r} with exception {b_e}.")
                 raise
 
     @staticmethod
@@ -540,7 +518,7 @@ class ArgSuite(Generic[ArgType]):
                 if arg_type_flag:
                     value = arg_dict.get(arg_name, MISSING)
                     type_origin = get_origin(arg_type)
-                    type_args: tuple = get_args(arg_type)
+                    type_args = get_args(arg_type)
                     type_to_new = get_origin(type_args[0]) if type_origin == Union and len(type_args) == 2 and type_args[1] == NoneType else type_origin
                     # argparse reading variable length arguments are all lists, need to apply the origin type for the conversion to correct type.
                     value = type_to_new(value) if value is not None and isinstance(value, List) else value
@@ -552,23 +530,27 @@ class ArgSuite(Generic[ArgType]):
             return arg_class(**nest_arg)
         return to_arg(self._arg_class, '')
 
-    def post_validation(self, arg: ArgType) -> None:
+    def post_validation(self, arg: ArgType, prefix: str = '') -> None:
         """This is called after __post_init__ to validate the fields."""
         arg_class = arg.__class__
-        for f, t in _annotations(arg_class).items():
-            attr = getattr(arg, f)
-            if _get_type_proxy(attr.__class__):
-                self.post_validation(attr)
-            _raise_if(f"Field '{f}' is still not initialized after post processing for {arg_class}", attr is LateInit)
-            arg_type = get_origin(t) or t
-            if arg_type == get_origin(Optional[Any]):
-                arg_type = get_args(t)
-            try:
-                conforming = isinstance(attr, arg_type)
-            except TypeError:  # best effort to check the instance type
-                logger.warning(f"Unable to check if {attr} is of type {t} for field {f} of argument class {arg_class}")
-                conforming = True
-            _raise_if(f"Field {f} has value of {attr} of type {attr.__class__} which is not of the expected type '{t}' for {arg_class}", not conforming)
+        for name, t in _annotations(arg_class).items():
+            attr = getattr(arg, name)
+            _raise_if(f"Field '{name}' is still not initialized after post processing for {arg_class}", attr is LateInit)
+            attr_class = attr.__class__
+            type_origin, type_args = get_origin(t), get_args(t)
+            if _get_type_proxy(t) or type_origin == Union and len(type_args) == 2 and type_args[1] == NoneType and _get_type_proxy(type_args[0]):
+                _raise_if(f"Field {name}' value of {attr}:{attr_class} is not of the expected type '{t}' for {arg_class}", attr_class not in (t, *type_args))
+                self.post_validation(attr, f'{prefix}{name}.')
+            else:
+                arg_type = get_origin(t) or t
+                if arg_type == get_origin(Optional[Any]):
+                    arg_type = get_args(t)
+                try:
+                    conforming = isinstance(attr, arg_type)  # e.g. list and List
+                except TypeError:  # best effort to check the instance type
+                    logger.warning(f"Unable to check if {attr} is of type {t} for field {name} of argument class {arg_class}")
+                    conforming = True
+                _raise_if(f"Field {name} has value of {attr} of type {attr_class} which is not of the expected type '{t}' for {arg_class}", not conforming)
 
     def _gen_cmd_argv(self, args: ArgType, prefix) -> Iterable[str]:
         proxy = _get_type_proxy(args.__class__)
@@ -622,10 +604,10 @@ class ArgSuite(Generic[ArgType]):
         argv = self._gen_cmd_argv(arg, '')
         if separator is None:
             separator = self._arg_class.__name__
-        return [separator + '+', *argv, separator + '-'] if separator else list(argv)
+        return (separator + '+', *argv, separator + '-') if separator else tuple(argv)
 
 
-def custom_arg_suite(type_handlers: List[Type[TypeHandler]] = None, primitive_handler_addons: List[Type[PrimitiveHandlerAddon]] = None):
+def custom_arg_suite(type_handlers: Sequence[Type[TypeHandler]] = (), primitive_handler_addons: Sequence[Type[PrimitiveHandlerAddon]] = ()):
     """Generate a decorator to easily convert back and forth from command-line to `NamedTuple` or `dataclass`.
 
     The decorator monkey patches the constructor, so that the IDE would infer the type of
@@ -651,9 +633,17 @@ def custom_arg_suite(type_handlers: List[Type[TypeHandler]] = None, primitive_ha
     :param primitive_handler_addons: the primitive types handling in addition to the provided primitive type basic operations
     :param type_handlers: the types handling in addition to the provided types handling.
     :return: the argument class decorator"""
-    def decorator(cls):
-        return ArgSuite(type_handlers, primitive_handler_addons)(cls)
-    return decorator
+    class Decorator:
+        def __init__(self) -> None:
+            addons = (PrimitiveHandlerAddon, *primitive_handler_addons)
+            handler_types: Sequence[Type] = (PrimitiveHandler, CollectionHandler, DictHandler, TupleHandler, *type_handlers)
+            primitives = tuple(reversed(addons))
+            self.handlers = tuple(handler(primitives) for handler in reversed(handler_types))
+
+        def __call__(self, cls):
+            ArgSuite(self.handlers, cls)
+            return cls
+    return Decorator()
 
 
 arg_suite = custom_arg_suite()  # Default argument class decorator to expose smart arg functionalities.
