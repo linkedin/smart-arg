@@ -621,7 +621,7 @@ def custom_arg_suite(type_handlers: Sequence[Type[TypeHandler]] = (), primitive_
     For the ArgClass fields without types but with default values: only private fields starts with "__" to overwrite the existed
     argument parameters are allowed; others will throw SmartArgError.
 
-    For the handlers, later ones win when they can handle the same type.
+    For the handlers/addons, first one in the sequence that claims to handle a type takes the precedence.
 
     Usage::
 
@@ -637,10 +637,8 @@ def custom_arg_suite(type_handlers: Sequence[Type[TypeHandler]] = (), primitive_
     :return: the argument class decorator"""
     class Decorator:
         def __init__(self) -> None:
-            addons = (PrimitiveHandlerAddon, *primitive_handler_addons)
-            handler_types: Sequence[Type] = (PrimitiveHandler, CollectionHandler, DictHandler, TupleHandler, *type_handlers)
-            primitives = tuple(reversed(addons))
-            self.handlers = tuple(handler(primitives) for handler in reversed(handler_types))
+            addons = (*primitive_handler_addons, PrimitiveHandlerAddon)
+            self.handlers = tuple(handler(addons) for handler in (*type_handlers, PrimitiveHandler, CollectionHandler, DictHandler, TupleHandler))
 
         def __call__(self, cls):
             ArgSuite(self.handlers, cls)
