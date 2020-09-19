@@ -343,7 +343,7 @@ class _dataclasses:
     @staticmethod
     def patch(cls):
         """Patch the argument dataclass so that `post_validation` is called and it's immutable if not `frozen` after initialization"""
-        def throw_if_frozen(self, fun, name, *args, **kwargs):
+        def raise_if_frozen(self, fun, name, *args, **kwargs):
             _raise_if(f"cannot assign to/delete field {name!r}", getattr(self, '__frozen__', False))
             getattr(object, fun)(self, name, *args, **kwargs)
 
@@ -355,8 +355,8 @@ class _dataclasses:
             object.__setattr__(self, '__frozen__', True)
             self.__class__.__arg_suite__.post_validation(self)
         cls.__init__, cls.__original_init__ = init, cls.__init__
-        cls.__setattr__ = lambda self, name, value: throw_if_frozen(self, '__setattr__', name, value)
-        cls.__delattr__ = lambda self, name, : throw_if_frozen(self, '__delattr__', name)
+        cls.__setattr__ = lambda self, name, value: raise_if_frozen(self, '__setattr__', name, value)
+        cls.__delattr__ = lambda self, name, : raise_if_frozen(self, '__delattr__', name)
     proxy = lambda t: _dataclasses if is_dataclass(t) else None
     asdict = lambda args: asdict(args)
     field_default = lambda arg_class, raw_arg_name: arg_class.__dataclass_fields__[raw_arg_name].default
@@ -384,7 +384,7 @@ class ArgSuite(Generic[ArgType]):
 
         :type `(Optional[Sequence[str]], Optional[str])`
         :param kwargs: Optional keyword arguments, to be passed to the argument class specific instance creator."""
-        logger.debug(f"Patched new for {arg_class} is called with {args} and {kwargs}.")
+        logger.info(f"Patched new for {arg_class} is called with {args} and {kwargs}.")
         if args:
             warnings.warn(f"Calling the patched constructor of {arg_class} with argv is deprecated, please use {arg_class}.__from_argv__ instead.")
             # TODO Exception handling with helpful error message
@@ -415,7 +415,8 @@ class ArgSuite(Generic[ArgType]):
         self._parser.convert_arg_line_to_args = lambda arg_line: arg_line.split()  # type: ignore
         self._gen_arguments_from_class(self._arg_class, '', True, [], type_proxy)
 
-    def _validate_fields(self, arg_class: Type) -> None:
+    @staticmethod
+    def _validate_fields(arg_class: Type) -> None:
         """Validate fields in `arg_class`.
 
         :raise: SmartArgError if the decorated argument class has non-typed field with defaults and such field
