@@ -35,7 +35,8 @@
 /ligradle/
 TEST-*.xml
 __pycache__/
-
+.DS_Store
+docs/.DS_Store
 
 
 # Added by mp-maker
