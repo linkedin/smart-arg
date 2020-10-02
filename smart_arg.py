@@ -180,9 +180,10 @@ class TypeHandler:
     def __init__(self, primitive_addons: Sequence[Type[PrimitiveHandlerAddon]]):
         self.primitive_addons = primitive_addons
 
-    def _build_common(self, kwargs: KwargsType, field_meta: FieldMeta, parent_required) -> None:
+    def _build_common(self, kwargs: KwargsType, field_meta: FieldMeta, parent_required: bool) -> None:
         """Build `help`, `default` and `required` for keyword arguments for ArgumentParser.add_argument
 
+        :param parent_required: is parent a required field or not
         :param kwargs: the keyword argument KwargsType object
         :param field_meta: the meta information extracted from the NamedTuple class"""
         # Build help message
@@ -341,6 +342,7 @@ class _namedtuple:  # TODO expand lambdas to static methods or use a better hold
 
 
 class _dataclasses:
+    """dataclass proxy"""
     @staticmethod
     def patch(cls):
         """Patch the argument dataclass so that `post_validation` is called and it's immutable if not `frozen` after initialization"""
