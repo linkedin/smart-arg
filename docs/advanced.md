@@ -26,6 +26,8 @@ class MyArg(NamedTuple):
                 num_layers = 3
             elif self.network == 'mlp':
                 num_layers = 5
+            else:
+                raise RuntimeError("Should not be reachable!")
             self.num_layers=num_layers
         else: 
             assert self.num_layers >= 0, f"number_layers: {self.num_layers} can not be negative"
@@ -112,10 +114,6 @@ class IntHandlerAddon(PrimitiveHandlerAddon):
         return t == int
 
 class IntTypeHandler(TypeHandler):
-    def _build_common(self, kwargs, field_meta) -> None:
-        super()._build_common(kwargs, field_meta)
-        kwargs.help = '(int, squared)'
-
     def _build_other(self, kwargs, arg_type) -> None:
         kwargs.type = self.primitive_addons[0].build_type(arg_type)
 

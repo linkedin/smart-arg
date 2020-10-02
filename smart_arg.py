@@ -45,7 +45,7 @@ The module contains the following public classes:
 
 - `arg_suite` -- The main entry point for Smart Argument Suite. As the
     example above shows, this decorator will attach an `ArgSuite` instance to
-    the argument `NamedTuple` or `dataclass`.
+    the argument container class `NamedTuple` or `dataclass` and patch it.
 
 - `PrimitiveHandlerAddon` -- The base class to deal some basic operation on primitive types,
     and users can implement their owns to change the behavior.
@@ -176,7 +176,7 @@ class PrimitiveHandlerAddon:
 
 
 class TypeHandler:
-    """Base type handler"""
+    """Base type handler. A subclass typically implements `gen_cli_arg` for serialization and `_build_other` for deserialization."""
     def __init__(self, primitive_addons: Sequence[Type[PrimitiveHandlerAddon]]):
         self.primitive_addons = primitive_addons
 
@@ -221,7 +221,7 @@ class TypeHandler:
         return kwargs
 
     def gen_cli_arg(self, action: Action, arg: Any) -> Iterable[str]:
-        """Generate command line for argument
+        """Generate command line for argument. This define the serialization process.
 
         :param action: action object stored for the argument
         :param arg: value of the argument
