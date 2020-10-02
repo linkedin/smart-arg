@@ -257,22 +257,22 @@ def test_nested():
 
 
 def test_cli_execution():
-    demo = f'{sys.executable if sys.executable else "python"} {os.path.join(os.path.dirname(__file__), "smart_arg_demo.py")}'
-    args = '--nn 200 300 --a_tuple s 5 --encoder FASTTEXT --h_param y:1 n:0 --nested --embedding_dim 100 --lr 0.001'
-    arg_line = demo + ' ' + args
+    cmd_line = f'{sys.executable if sys.executable else "python"} {os.path.join(os.path.dirname(__file__), "smart_arg_demo.py")}'
+    args = ' --nn 200 300 --a_tuple s 5 --encoder FASTTEXT --h_param y:1 n:0 --nested --embedding_dim 100 --lr 0.001'
+    cmd_line += args
     kwargs = {'stdout': subprocess.PIPE, 'stderr': subprocess.PIPE, 'shell': True}
-    completed_process = subprocess.run(arg_line, **kwargs)
+    completed_process = subprocess.run(cmd_line, **kwargs)
     assert completed_process.stderr == b''
     assert completed_process.returncode == 0
 
-    completed_process = subprocess.run(arg_line + ' --adp False', **kwargs)
+    completed_process = subprocess.run(f'{cmd_line} --adp False', **kwargs)
     assert completed_process.returncode == 168
 
-    completed_process = subprocess.run(arg_line + ' --nested "OH NO!"', **kwargs)
+    completed_process = subprocess.run(f'{cmd_line} --nested "OH NO!"', **kwargs)
     # deserialization should fail
     assert completed_process.returncode == 1
 
-    completed_process = subprocess.run(f'{demo} MyTup+ {args} MyTup- --nested "OH NO!"', **kwargs)
+    completed_process = subprocess.run(f'{cmd_line} MyTup+ {args} MyTup- --nested "OH NO!"', **kwargs)
     assert completed_process.returncode == 0
 
 
