@@ -12,7 +12,6 @@ from contextlib import redirect_stderr
 import pytest
 
 from smart_arg import arg_suite, custom_arg_suite, LateInit, SmartArgError, TypeHandler, _first_handles, PrimitiveHandlerAddon
-from smart_arg_mock import main, MockArgTup
 
 
 @arg_suite
@@ -178,23 +177,6 @@ def test_validate_fields():
     pytest.raises(SmartArgError, arg_suite, TrailingUnderscore)
 
 
-def test_argv():
-    import unittest.mock
-    expected_arg = MockArgTup(
-        a_bool=False,
-        b_list_int=[1, 2, 3],
-        d_tuple_2=('hello', 2),
-        e_dict_str_int={'size': 32, 'area': 90}
-    )
-    cmd_line = expected_arg.__to_argv__()
-    with unittest.mock.patch('sys.argv', ('mock',) + cmd_line):
-        parsed = main(sys.argv[1:])
-        parsed_factory = MockArgTup.__from_argv__()
-
-        assert parsed == parsed_factory
-        assert parsed == expected_arg
-
-
 def test_primitive_addon():
     class IntHandlerAddon(PrimitiveHandlerAddon):
         @staticmethod
@@ -210,8 +192,8 @@ def test_primitive_addon():
             return t == int
 
     class IntTypeHandler(TypeHandler):
-        def _build_common(self, kwargs, field_meta) -> None:
-            super()._build_common(kwargs, field_meta)
+        def _build_common(self, kwargs, field_meta, parent_required) -> None:
+            super()._build_common(kwargs, field_meta, parent_required)
             kwargs.help = '(int, squared)'
 
         def _build_other(self, kwargs, arg_type) -> None:
@@ -276,7 +258,7 @@ def test_nested():
 
 def test_cli_execution():
     demo = f'{sys.executable if sys.executable else "python"} {os.path.join(os.path.dirname(__file__), "smart_arg_demo.py")}'
-    args = '--nn 200 300 --a_tuple s 5 --encoder fastText --h_param y:1 n:0 --nested.n_nested.n_name "nested name" --embedding_dim 100 --lr 0.001'
+    args = '--nn 200 300 --a_tuple s 5 --encoder FASTTEXT --h_param y:1 n:0 --nested --embedding_dim 100 --lr 0.001'
     arg_line = demo + ' ' + args
     kwargs = {'stdout': subprocess.PIPE, 'stderr': subprocess.PIPE, 'shell': True}
     completed_process = subprocess.run(arg_line, **kwargs)
@@ -287,6 +269,7 @@ def test_cli_execution():
     assert completed_process.returncode == 168
 
     completed_process = subprocess.run(arg_line + ' --nested "OH NO!"', **kwargs)
+    # deserialization should fail
     assert completed_process.returncode == 1
 
     completed_process = subprocess.run(f'{demo} MyTup+ {args} MyTup- --nested "OH NO!"', **kwargs)
