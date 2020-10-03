@@ -11,7 +11,7 @@ from contextlib import redirect_stderr
 
 import pytest
 
-from smart_arg import arg_suite, custom_arg_suite, LateInit, SmartArgError, TypeHandler, _first_handles, PrimitiveHandlerAddon
+from smart_arg import arg_suite, ArgSuiteDecorator, LateInit, SmartArgError, TypeHandler, _first_handles, PrimitiveHandlerAddon
 
 
 @arg_suite
@@ -202,7 +202,7 @@ def test_primitive_addon():
         def handles(self, t: Type) -> bool:
             return t == int
 
-    @custom_arg_suite(primitive_handler_addons=[IntHandlerAddon], type_handlers=[IntTypeHandler])
+    @ArgSuiteDecorator(primitive_handler_addons=[IntHandlerAddon], type_handlers=[IntTypeHandler])
     class MyTuple(NamedTuple):
         a_int: int
 
