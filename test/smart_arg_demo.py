@@ -17,15 +17,15 @@ class NestedArg(NamedTuple):
 
 
 @arg_suite
-class MyTup(NamedTuple):
-    """MyTup docstring goes to description"""
+class MyModelConfig(NamedTuple):
+    """MyModelConfig docstring goes to description"""
+    adp: bool
     nn: List[int]  # Comments go to argparse help
     a_tuple: Tuple[str, int]
-    h_param: Dict[str, int]  # Hyperparameters
+    h_param: Dict[str, int] = {}  # Hyper parameters
     encoder: Encoder = Encoder.FASTTEXT  # Word encoder type
     nested: Optional[NestedArg] = None  # nested args
     n: Optional[int] = LateInit
-    adp: bool = True  # bool is a bit tricky for now
     embedding_dim: int = 100  # Size of embedding vector
     lr: float = 1e-3  # Learning rate
 
@@ -35,21 +35,21 @@ class MyTup(NamedTuple):
             self.n = self.nn[0]
 
 
-expected_arg = MyTup(nn=[200, 300], a_tuple=("s", 5), h_param={"y": 1, "n": 0}, nested=NestedArg())
+my_config = MyModelConfig(nn=[200, 300], a_tuple=("s", 5), adp=True, h_param={'n': 0, 'y': 1}, nested=NestedArg())
 
-expected_argv = expected_arg.__to_argv__()
-print(f"Serialized reference to the expected argument object:\n{expected_argv!r}")
+my_config_argv = my_config.__to_argv__()
+print(f"Serialized reference to the expected argument object:\n{my_config_argv!r}")
 
 print(f"Deserializing from {sys.argv[1:]!r}.")
-deserialized = MyTup.__from_argv__()
+deserialized = MyModelConfig.__from_argv__()
 
-re_deserialized = MyTup.__from_argv__(expected_argv)
-if deserialized == expected_arg == re_deserialized:
+re_deserialized = MyModelConfig.__from_argv__(my_config_argv)
+if deserialized == my_config == re_deserialized:
     print(f"Matched: '{deserialized}'")
 else:
     err_code = 168
     print(f"Error({err_code}):\n"
-          f"Expected:\n {expected_arg}\n"
+          f"Expected:\n {my_config}\n"
           f"Re-deserialized:\n {re_deserialized}\n"
           f"Deserialized:\n {deserialized}")
     exit(err_code)

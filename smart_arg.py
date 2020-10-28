@@ -45,7 +45,7 @@ The module contains the following public classes:
 
 - `arg_suite` -- The main entry point for Smart Argument Suite. As the
     example above shows, this decorator will attach an `ArgSuite` instance to
-    the argument `NamedTuple` or `dataclass`.
+    the argument container class `NamedTuple` or `dataclass` and patch it.
 
 - `PrimitiveHandlerAddon` -- The base class to deal some basic operation on primitive types,
     and users can implement their owns to change the behavior.
@@ -176,7 +176,7 @@ class PrimitiveHandlerAddon:
 
 
 class TypeHandler:
-    """Base type handler"""
+    """Base type handler. A subclass typically implements `gen_cli_arg` for serialization and `_build_other` for deserialization."""
     def __init__(self, primitive_addons: Sequence[Type[PrimitiveHandlerAddon]]):
         self.primitive_addons = primitive_addons
 
@@ -221,7 +221,7 @@ class TypeHandler:
         return kwargs
 
     def gen_cli_arg(self, action: Action, arg: Any) -> Iterable[str]:
-        """Generate command line for argument
+        """Generate command line for argument. This define the serialization process.
 
         :param action: action object stored for the argument
         :param arg: value of the argument
@@ -421,7 +421,8 @@ class ArgSuite(Generic[ArgType]):
         arg_class.__from_argv__ = self.parse_to_arg
         arg_class.__arg_suite__ = self
         self._arg_class = arg_class
-        self._parser = ArgumentParser(description=self._arg_class.__doc__, argument_default=MISSING, fromfile_prefix_chars='@')  # type: ignore
+        self._parser = ArgumentParser(description=self._arg_class.__doc__, argument_default=MISSING,  # type: ignore
+                                      fromfile_prefix_chars='@', allow_abbrev=False)
         self._parser.convert_arg_line_to_args = lambda arg_line: arg_line.split()  # type: ignore
         self._gen_arguments_from_class(self._arg_class, '', True, [], type_proxy)
 
@@ -617,7 +618,7 @@ class ArgSuite(Generic[ArgType]):
         return (separator + '+', *argv, separator + '-') if separator else tuple(argv)
 
 
-def custom_arg_suite(type_handlers: Sequence[Type[TypeHandler]] = (), primitive_handler_addons: Sequence[Type[PrimitiveHandlerAddon]] = ()):
+class ArgSuiteDecorator:
     """Generate a decorator to easily convert back and forth from command-line to `NamedTuple` or `dataclass`.
 
     The decorator monkey patches the constructor, so that the IDE would infer the type of
@@ -634,7 +635,7 @@ def custom_arg_suite(type_handlers: Sequence[Type[TypeHandler]] = (), primitive_
     Usage::
 
         @arg_suite  # `arg_suite` is a shorthand for `custom_arg_suite()`
-        class MyTup(NamedTuple):
+        class MyArg(NamedTuple):
             field_one: str
             _field_one = {"choices": ["one", "two"]}  # advanced usage: overwrite the `field_one` parameter
             field_two: List[int]
@@ -643,15 +644,14 @@ def custom_arg_suite(type_handlers: Sequence[Type[TypeHandler]] = (), primitive_
     :param primitive_handler_addons: the primitive types handling in addition to the provided primitive type basic operations
     :param type_handlers: the types handling in addition to the provided types handling.
     :return: the argument class decorator"""
-    class Decorator:
-        def __init__(self) -> None:
-            addons = (*primitive_handler_addons, PrimitiveHandlerAddon)
-            self.handlers = tuple(handler(addons) for handler in (*type_handlers, PrimitiveHandler, CollectionHandler, DictHandler, TupleHandler))
+    def __init__(self, type_handlers: Sequence[Type[TypeHandler]] = (), primitive_handler_addons: Sequence[Type[PrimitiveHandlerAddon]] = ()) -> None:
+        addons = (*primitive_handler_addons, PrimitiveHandlerAddon)
+        self.handlers = tuple(handler(addons) for handler in (*type_handlers, PrimitiveHandler, CollectionHandler, DictHandler, TupleHandler))
 
-        def __call__(self, cls):
-            ArgSuite(self.handlers, cls)
-            return cls
-    return Decorator()
+    def __call__(self, cls):
+        ArgSuite(self.handlers, cls)
+        return cls
 
 
+custom_arg_suite = ArgSuiteDecorator  # Snake case decorator alias for the class name in camel case
 arg_suite = custom_arg_suite()  # Default argument class decorator to expose smart arg functionalities.
