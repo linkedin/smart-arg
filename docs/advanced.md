@@ -96,7 +96,7 @@ other than primitive ones such as `List`, `Set`, `Dict`, `Tuple`, etc.
 from math import sqrt
 from typing import NamedTuple, Any, Type
 
-from smart_arg import PrimitiveHandlerAddon, TypeHandler, ArgSuiteDecorator
+from smart_arg import PrimitiveHandlerAddon, TypeHandler, custom_arg_suite
 
 
 # overwrite int primitive type handling by squaring it

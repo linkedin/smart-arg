@@ -58,7 +58,7 @@ All other classes and methods in this module are considered implementation detai
 __version__ = '0.3.*'
 __all__ = (
     'arg_suite',
-    'ArgSuiteDecorator',
+    'custom_arg_suite',
     'LateInit',
     'SmartArgError',
     'TypeHandler',
@@ -634,7 +634,7 @@ class ArgSuiteDecorator:
 
     Usage::
 
-        @arg_suite  # `arg_suite` is a shorthand for `ArgSuiteDecorator()`
+        @arg_suite  # `arg_suite` is a shorthand for `custom_arg_suite()`
         class MyArg(NamedTuple):
             field_one: str
             _field_one = {"choices": ["one", "two"]}  # advanced usage: overwrite the `field_one` parameter
@@ -653,4 +653,5 @@ class ArgSuiteDecorator:
         return cls
 
 
-arg_suite = ArgSuiteDecorator()  # Default argument class decorator to expose smart arg functionalities.
+custom_arg_suite = ArgSuiteDecorator  # Snake case decorator alias for the class name in camel case
+arg_suite = custom_arg_suite()  # Default argument class decorator to expose smart arg functionalities.
