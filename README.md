@@ -9,6 +9,8 @@ and passed through command-line interfaces.
 `smart-arg` promotes arguments type-safety, enables IDEs' code autocompletion and type hints 
 functionalities, and helps one produce correct code.
 
+![](smart-arg-demo.gif)
+
 ## Quick start
 
 The [`smart-arg`](https://pypi.org/project/smart-arg/) package is available through `pip`.
