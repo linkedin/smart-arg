@@ -35,21 +35,22 @@ class MyModelConfig(NamedTuple):
             self.n = self.nn[0]
 
 
-my_config = MyModelConfig(nn=[200, 300], a_tuple=("s", 5), adp=True, h_param={'n': 0, 'y': 1}, nested=NestedArg())
+if __name__ == '__main__':
+    my_config = MyModelConfig(nn=[200, 300], a_tuple=("s", 5), adp=True, h_param={'n': 0, 'y': 1}, nested=NestedArg())
 
-my_config_argv = my_config.__to_argv__()
-print(f"Serialized reference to the expected argument object:\n{my_config_argv!r}")
+    my_config_argv = my_config.__to_argv__()
+    print(f"Serialized reference to the expected argument container object:\n{my_config_argv!r}")
 
-print(f"Deserializing from {sys.argv[1:]!r}.")
-deserialized = MyModelConfig.__from_argv__()
+    print(f"Deserializing from the command line string list: {sys.argv[1:]!r}.")
+    deserialized = MyModelConfig.__from_argv__()
 
-re_deserialized = MyModelConfig.__from_argv__(my_config_argv)
-if deserialized == my_config == re_deserialized:
-    print(f"Matched: '{deserialized}'")
-else:
-    err_code = 168
-    print(f"Error({err_code}):\n"
-          f"Expected:\n {my_config}\n"
-          f"Re-deserialized:\n {re_deserialized}\n"
-          f"Deserialized:\n {deserialized}")
-    exit(err_code)
+    re_deserialized = MyModelConfig.__from_argv__(my_config_argv)
+    if deserialized == my_config == re_deserialized:
+        print(f"All matched, argument container object: '{deserialized}'")
+    else:
+        err_code = 168
+        print(f"Error({err_code}):\n"
+              f"Expected argument container object:\n {my_config}\n"
+              f"Re-deserialized:\n {re_deserialized}\n"
+              f"Deserialized:\n {deserialized}")
+        exit(err_code)
