@@ -3,15 +3,15 @@ import os
 import subprocess
 import sys
 from contextlib import redirect_stderr
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, replace, field
 from enum import Enum
 from math import sqrt
 from types import SimpleNamespace
-from typing import List, NamedTuple, Tuple, Optional, Dict, Set, Type, Any
+from typing import List, NamedTuple, Tuple, Optional, Dict, Set, Type, Any, Sequence, FrozenSet
 
 import pytest
 
-from smart_arg import arg_suite, custom_arg_suite, LateInit, SmartArgError, TypeHandler, _first_handles, PrimitiveHandlerAddon
+from smart_arg import arg_suite, custom_arg_suite, LateInit, SmartArgError, TypeHandler, _first_handles, PrimitiveHandlerAddon, frozenlist
 
 
 @arg_suite
@@ -37,7 +37,12 @@ class MyTupBasic:
     e_dict_str_int: Dict[str, int]
     e_dict_int_bool: Dict[int, bool]
     c_optional_float: Optional[float] = None
-    with_default: int = 10
+    immutable_list: List[int] = frozenlist((1, 2))
+    immutable_seq: Sequence[int] = frozenlist((1, 2))
+    immutable_set: Set[int] = frozenset((1, 2))
+    immutable_f_set: FrozenSet[int] = frozenset((1, 2))
+    with_default_factory: List[float] = field(default_factory=list)
+    with_default: int = field(default=10)
 
 
 my_tup_basic = MyTupBasic(

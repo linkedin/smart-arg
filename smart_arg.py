@@ -61,6 +61,7 @@ import os
 import sys
 import warnings
 from argparse import Action, ArgumentParser
+from collections import abc
 from types import SimpleNamespace as KwargsType
 from typing import Any, Callable, Dict, Generic, Iterable, List, NamedTuple, Optional, Sequence, Tuple, Type, TypeVar, Union
 from enum import EnumMeta, Enum
@@ -70,6 +71,7 @@ __version__ = pkg_resources.get_distribution(__name__).version
 __all__ = (
     'arg_suite',
     'custom_arg_suite',
+    'frozenlist',
     'LateInit',
     'SmartArgError',
     'TypeHandler',
@@ -108,6 +110,7 @@ else:
                       f"unsupported python version {sys.version_info} < 3.6. It might work with 'pip install typing_inspect'.")
         raise
 
+frozenlist = tuple  # tuple to simulate an immutable list. [https://www.python.org/dev/peps/pep-0603/#rationale]
 _black_hole = lambda *args, **kwargs: None
 _mro_all = lambda arg_class, get_dict: {k: v for b in (*arg_class.__mro__[-1:0:-1], arg_class) if b.__module__ != 'builtins' for k, v in get_dict(b).items()}
 # note: Fields without type annotation won't be regarded as a property/entry _fields.
@@ -289,7 +292,7 @@ class CollectionHandler(TypeHandler):
 
     def handles(self, t: Type) -> bool:
         args = get_args(t)
-        return len(args) == 1 and get_origin(t) in (list, set) and _first_handles(self.primitive_addons, args[0], False)
+        return len(args) == 1 and get_origin(t) in (list, set, frozenset, abc.Sequence) and _first_handles(self.primitive_addons, args[0], False)
 
 
 class DictHandler(TypeHandler):
@@ -359,9 +362,13 @@ class _dataclasses:
         cls.__init__, cls.__original_init__ = init, cls.__init__
         cls.__setattr__ = lambda self, name, value: raise_if_frozen(self, '__setattr__', name, value)
         cls.__delattr__ = lambda self, name, : raise_if_frozen(self, '__delattr__', name)
+
+    @staticmethod
+    def field_default(arg_class, raw_arg_name):
+        f = arg_class.__dataclass_fields__[raw_arg_name]
+        return f.default_factory() if f.default_factory is not MISSING else f.default  # Assuming the default_factory has no side effects.
     proxy = lambda t: _dataclasses if is_dataclass(t) else None
     asdict = lambda args: asdict(args)
-    field_default = lambda arg_class, raw_arg_name: arg_class.__dataclass_fields__[raw_arg_name].default
     new_instance = lambda arg_class, _: arg_class.__original_new__(arg_class)
 
 
@@ -552,6 +559,8 @@ class ArgSuite(Generic[ArgType]):
                 arg_type = get_origin(t) or t
                 if arg_type == get_origin(Optional[Any]):
                     arg_type = get_args(t)
+                if arg_type is list and isinstance(attr, tuple) or arg_type is set and isinstance(attr, frozenset):  # allow for immutable replacements
+                    continue
                 try:
                     conforming = isinstance(attr, arg_type)  # e.g. list and List
                 except TypeError:  # best effort to check the instance type
