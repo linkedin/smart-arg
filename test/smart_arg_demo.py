@@ -1,8 +1,8 @@
 import sys
 from enum import Enum, auto
-from typing import List, NamedTuple, Tuple, Optional, Dict
+from typing import List, NamedTuple, Tuple, Optional, Dict, Sequence
 
-from smart_arg import arg_suite, LateInit
+from smart_arg import arg_suite, LateInit, frozenlist
 
 
 class Encoder(Enum):
@@ -26,6 +26,7 @@ class MyModelConfig(NamedTuple):
     encoder: Encoder = Encoder.FASTTEXT  # Word encoder type
     nested: Optional[NestedArg] = None  # nested args
     n: Optional[int] = LateInit
+    immutable_list: Sequence[int] = frozenlist((1, 2))
     embedding_dim: int = 100  # Size of embedding vector
     lr: float = 1e-3  # Learning rate
 
