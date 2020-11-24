@@ -68,7 +68,6 @@ __all__ = (
 import logging
 import os
 import sys
-import tokenize
 import warnings
 from argparse import Action, ArgumentParser
 from types import SimpleNamespace as KwargsType
@@ -87,7 +86,9 @@ if SMART_ARG_LOG_LEVEL in os.environ:
     logger.setLevel(log_level)
     logger.info(f"Detected environment var `{SMART_ARG_LOG_LEVEL}, set log level to '{log_level}' and log to stream.")
 
-if sys.version_info >= (3, 7):
+if sys.version_info >= (3, 8):
+    from typing import get_origin, get_args
+elif sys.version_info >= (3, 7):
     # Python == 3.7.x. Defining the back-ported get_origin, get_args
     # 3.7 `List.__origin__ == list`
     get_origin, get_args = lambda tp: getattr(tp, '__origin__', None), lambda tp: getattr(tp, '__args__', ())
@@ -448,7 +449,7 @@ class ArgSuite(Generic[ArgType]):
         _raise_if(f"Nested argument class '{arg_class}' with '__post_init__' expected to be decorated.",
                   not (suite and suite._arg_class is arg_class) and hasattr(arg_class, '__post_init__'))
         self._validate_fields(arg_class)
-        comments = _mro_all(arg_class, self.get_comments)
+        comments = _mro_all(arg_class, self.get_comments_from_source)
         for raw_arg_name, arg_type in _annotations(arg_class).items():
             arg_name = f'{prefix}{raw_arg_name}'
             try:
@@ -521,7 +522,7 @@ class ArgSuite(Generic[ArgType]):
                     type_args = get_args(arg_type)
                     type_to_new = get_origin(type_args[0]) if type_origin == Union and len(type_args) == 2 and type_args[1] == NoneType else type_origin
                     # argparse reading variable length arguments are all lists, need to apply the origin type for the conversion to correct type.
-                    value = type_to_new(value) if value is not None and isinstance(value, List) else value
+                    value = type_to_new(value) if value is not None and isinstance(value, List) else value  # type: ignore
                 else:  # deal with nested container
                     is_nested_items_defined = any((name for name in arg_dict.keys() if name.startswith(arg_name)))  # consider defined only if there's subfield
                     value = to_arg(_unwrap_optional(arg_type)[0], f'{arg_name}.') if is_nested_items_defined else MISSING
@@ -571,39 +572,28 @@ class ArgSuite(Generic[ArgType]):
                     self._gen_cmd_argv(arg, f'{prefix}{name}.')
 
     @staticmethod
-    def get_comments(arg_cls: Type[ArgType]) -> Dict[str, str]:
+    def get_comments_from_source(arg_cls: Type[ArgType]) -> Dict[str, str]:
         """Get in-line comments for the input class fields. Only single line of trailing comment is supported.
 
         :param arg_cls: the input class
         :return: a dictionary with key of class field name and value of in-line comment"""
-        def line_tokenizer(lines):
-            def source():
-                line_tokenizer.index, line = next(lines)
-                return line
-            source()  # skip the `class` line and set source.index
-            last_index = line_tokenizer.index
-            for t in tokenize.generate_tokens(source):
-                if last_index != line_tokenizer.index:
-                    yield '\n'  # New line indicator
-                yield t
-                last_index = line_tokenizer.index
         comments = {}
-        field_column = field = last_token = None
-        import inspect
+        indent = 0
+        field = None
+        import inspect, tokenize  # noqa: E401
         try:
-            for token in line_tokenizer(lines=(enumerate(inspect.getsourcelines(arg_cls)[0]))):
-                if token == '\n':
-                    field = None  # New line
-                elif token.type == tokenize.NAME:
-                    if not field_column:
-                        field_column = token.start[1]
-                elif token.exact_type == tokenize.COLON:
-                    if last_token.start[1] == field_column:  # type: ignore
-                        field = last_token.string  # type: ignore # All fields are required to have type annotation so last_token is not None
+            for token in tokenize.generate_tokens(iter(inspect.getsourcelines(arg_cls)[0]).__next__):
+                if token.type == tokenize.NEWLINE:
+                    field = None
+                elif token.type == tokenize.INDENT:
+                    indent += 1
+                elif token.type == tokenize.DEDENT:
+                    indent -= 1
+                elif token.type == tokenize.NAME and indent == 1 and not field:
+                    field = token
                 elif token.type == tokenize.COMMENT and field:
                     # TODO nicer way to deal with with long comments or support multiple lines
-                    comments[field] = (token.string + ' ')[1:token.string.lower().find('# noqa:')]  # TODO consider move processing out
-                last_token = token
+                    comments[field.string] = (token.string + ' ')[1:token.string.lower().find('# noqa:')]  # TODO consider move processing out
         except Exception as e:
             logger.error(f'Failed to parse comments from source of class {arg_cls}, continue without them.', exc_info=e)
         return comments
