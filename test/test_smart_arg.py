@@ -130,7 +130,7 @@ def test_post_process():
 def test_validate():
     @arg_suite
     class MyTup(NamedTuple):
-        a_int: int = LateInit  # if a_int is not in the argument, post_process will initialize it
+        a_int: int = LateInit  # if a_int is not in the argument, __post_init__ needs to initialize it
 
     validated = False
 
@@ -274,7 +274,7 @@ def test_cli_execution():
     cmd_line += args
     kwargs = {'stdout': subprocess.PIPE, 'stderr': subprocess.PIPE, 'shell': True}
     completed_process = subprocess.run(cmd_line, **kwargs)
-    assert completed_process.stderr == b''
+    assert completed_process.stderr.decode('utf-8') == ''
     assert completed_process.returncode == 0
 
     completed_process = subprocess.run(f'{cmd_line} --adp False', **kwargs)
@@ -285,7 +285,7 @@ def test_cli_execution():
 
     separator = 'MyModelConfig'
     completed_process = subprocess.run(f'{cmd_line} {separator}+ {args} {separator}- --nested "OH NO!"', **kwargs)
-    assert completed_process.stderr == b''
+    assert completed_process.stderr.decode('utf-8') == ''
     assert completed_process.returncode == 0, "Argument outside of separators should be ignored."
 
 

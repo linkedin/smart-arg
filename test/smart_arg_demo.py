@@ -22,11 +22,11 @@ class MyModelConfig(NamedTuple):
     adp: bool
     nn: List[int]  # Comments go to argparse help
     a_tuple: Tuple[str, int]
-    h_param: Dict[str, int] = {}  # Hyper parameters
+    h_param: Dict[str, int] = {}  # Hyperparameters
     encoder: Encoder = Encoder.FASTTEXT  # Word encoder type
     nested: Optional[NestedArg] = None  # nested args
-    n: Optional[int] = LateInit
-    immutable_list: Sequence[int] = frozenlist((1, 2))
+    n: Optional[int] = LateInit  # An argument that can be auto-set in post processing
+    immutable_list: Sequence[int] = frozenlist((1, 2))  # A frozenlist is an alias to tuple
     embedding_dim: int = 100  # Size of embedding vector
     lr: float = 1e-3  # Learning rate
 
@@ -47,11 +47,11 @@ if __name__ == '__main__':
 
     re_deserialized = MyModelConfig.__from_argv__(my_config_argv)
     if deserialized == my_config == re_deserialized:
-        print(f"All matched, argument container object: '{deserialized}'")
+        print(f"All matched, argument container object: '{deserialized!r}'")
     else:
         err_code = 168
         print(f"Error({err_code}):\n"
-              f"Expected argument container object:\n {my_config}\n"
-              f"Re-deserialized:\n {re_deserialized}\n"
-              f"Deserialized:\n {deserialized}")
+              f"Expected argument container object:\n {my_config!r}\n"
+              f"Re-deserialized:\n {re_deserialized!r}\n"
+              f"Deserialized:\n {deserialized!r}")
         exit(err_code)

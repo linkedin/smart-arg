@@ -2,7 +2,8 @@
 
 This module is an argument serialization and deserialization library that:
 
-    - handles two-way conversions: a typed immutable argument object (A `NamedTuple` or `dataclass` instance) <==> a command-line argv
+    - handles two-way conversions: a typed, preferably immutable argument container object
+    (a `NamedTuple` or `dataclass` instance) <==> a command-line argv
     - enables IDE type hints and code auto-completion by using `NamedTuple` or `dataclass`
     - promotes type-safety of cli-ready arguments
 
@@ -41,7 +42,7 @@ The following is a simple usage example::
     arg.__to_argv__()
 
 
-The module contains the following public classes:
+The module contains the following public classes/functions:
 
 - `arg_suite` -- The main entry point for Smart Argument Suite. As the
     example above shows, this decorator will attach an `ArgSuite` instance to
@@ -196,16 +197,11 @@ class TypeHandler:
         help_builder = ['(', 'Optional[' if field_meta.optional else '', self._type_to_str(arg_type), ']' if field_meta.optional else '']
         # Get default if specified and set required if no default
         kwargs.required = parent_required and field_meta.default is MISSING
-        if kwargs.required:
-            help_builder.append('; required')
-        else:
-            # Only add default to the help message for informational purpose. The default is set when creating the argument class instance.
-            help_builder.append('; default: ')
-            help_builder.append(str(field_meta.default))
-
-        help_builder.append(') ')
-        # Add from source code comment
-        help_builder.append(field_meta.comment)
+        message_required = 'required' if kwargs.required else \
+            'to be post-processed' if field_meta.default is LateInit else \
+            'required if its container is being specified or marked' if field_meta.default is MISSING else \
+            f'default: {field_meta.default}'  # informational only. The default is set when creating the argument container instance.
+        help_builder.extend(('; ', message_required, ') ', field_meta.comment))  # Add from source code comment
         kwargs.help = ''.join(help_builder)
 
     def _build_other(self, kwargs: KwargsType, arg_type: Type) -> None:
@@ -471,14 +467,11 @@ class ArgSuite(Generic[ArgType]):
                     self._gen_arguments_from_class(arg_type, f'{arg_name}.', required, arg_classes, sub_type_proxy)
                     arg_classes.pop()
                     kwargs = KwargsType(nargs='?',
-                                        required=False,
-                                        metavar='Help message only. Do NOT attempt to specify, or an exception will be raised.',
-                                        # capture the value of arg_name in the lambda since arg_name is not immutable
-                                        type=lambda _, arg=arg_name: _raise_if(f"Nested argument {arg!r} can not be directly specified"),
-                                        help=f"""This is a placeholder for the nested argument '{arg_name}'.
-                                             Its parent is {'' if parent_required else 'not'} required.
-                                             {"It's required" if default is MISSING else f"Not required with default: {default}"},
-                                             if the parent is being parsed.""")
+                                        required=required,
+                                        metavar='Does NOT accept any value',
+                                        # capture the value of arg_name in the lambda default argument since arg_name is not immutable
+                                        type=lambda _, arg=arg_name: _raise_if(f"Nested argument container marker {arg!r} does not accept any value."),
+                                        help=f"nested argument container marker{'' if default in (LateInit, MISSING) else f'; default: {default}'}")
                 else:
                     handler = _first_handles(self.handlers, arg_type)
                     field_meta = FieldMeta(comment=comments.get(raw_arg_name, ''), default=default, type=arg_type, optional=optional)
