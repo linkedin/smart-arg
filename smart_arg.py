@@ -591,19 +591,22 @@ class ArgSuite(Generic[ArgType]):
         comments = {}
         field_column = field = last_token = None
         import inspect
-        for token in line_tokenizer(lines=(enumerate(inspect.getsourcelines(arg_cls)[0]))):
-            if token == '\n':
-                field = None  # New line
-            elif token.type == tokenize.NAME:
-                if not field_column:
-                    field_column = token.start[1]
-            elif token.exact_type == tokenize.COLON:
-                if last_token.start[1] == field_column:  # type: ignore
-                    field = last_token.string  # type: ignore # All fields are required to have type annotation so last_token is not None
-            elif token.type == tokenize.COMMENT and field:
-                # TODO nicer way to deal with with long comments or support multiple lines
-                comments[field] = (token.string + ' ')[1:token.string.lower().find('# noqa:')]  # TODO consider move processing out
-            last_token = token
+        try:
+            for token in line_tokenizer(lines=(enumerate(inspect.getsourcelines(arg_cls)[0]))):
+                if token == '\n':
+                    field = None  # New line
+                elif token.type == tokenize.NAME:
+                    if not field_column:
+                        field_column = token.start[1]
+                elif token.exact_type == tokenize.COLON:
+                    if last_token.start[1] == field_column:  # type: ignore
+                        field = last_token.string  # type: ignore # All fields are required to have type annotation so last_token is not None
+                elif token.type == tokenize.COMMENT and field:
+                    # TODO nicer way to deal with with long comments or support multiple lines
+                    comments[field] = (token.string + ' ')[1:token.string.lower().find('# noqa:')]  # TODO consider move processing out
+                last_token = token
+        except Exception as e:
+            logger.error(f'Failed to parse comments from source of class {arg_cls}, continue without them.', exc_info=e)
         return comments
 
     def to_argv(self, arg: ArgType, separator: Optional[str] = '') -> Sequence[str]:
