@@ -55,7 +55,7 @@ The module contains the following public classes:
 
 All other classes and methods in this module are considered implementation details."""
 
-__version__ = '0.3.*'
+__version__ = '0.4'
 __all__ = (
     'arg_suite',
     'custom_arg_suite',
@@ -220,13 +220,11 @@ class TypeHandler:
         self._build_other(kwargs, field_meta.type)
         return kwargs
 
-    def gen_cli_arg(self, action: Action, arg: Any) -> Iterable[str]:
+    def gen_cli_arg(self, arg: Any) -> Iterable[str]:
         """Generate command line for argument. This define the serialization process.
 
-        :param action: action object stored for the argument
         :param arg: value of the argument
         :return: iterable command line str"""
-        yield action.option_strings[0]
         args = (arg,) if isinstance(arg, str) or not isinstance(arg, Iterable) else arg
         yield from (_first_handles(self.primitive_addons, type(arg)).build_str(arg) for arg in args)
 
@@ -306,8 +304,7 @@ class DictHandler(TypeHandler):
         k, v = kv_apply('build_metavar')
         kwargs.metavar = f'{k}:{v}'
 
-    def gen_cli_arg(self, action: Action, arg):
-        yield action.option_strings[0]
+    def gen_cli_arg(self, arg):
         arg_to_str = lambda arg_v: _first_handles(self.primitive_addons, type(arg_v)).build_str(arg_v)
         yield from (f'{arg_to_str(k)}:{arg_to_str(v)}' for k, v in arg.items())
 
@@ -481,6 +478,7 @@ class ArgSuite(Generic[ArgType]):
                     if user_override.get('choices', None):
                         logger.info(f"Instead of defining `choices`, please consider using Enum for {arg_name}")
                     kwargs.__dict__.update(user_override)  # apply user override to the keyword argument object
+                    kwargs.__dict__.pop('_serialization', None)
                     logger.debug(f"Adding kwargs {kwargs} for --{arg_name}")
                 self.handler_actions[arg_name] = (sub_type_proxy or handler), self._parser.add_argument(f'--{arg_name}', **vars(kwargs))
             except BaseException as b_e:
@@ -560,16 +558,17 @@ class ArgSuite(Generic[ArgType]):
                 _raise_if(f"Field {name!r} has value of {attr!r} of type {attr_class} which is not of the expected type '{t}' for {arg_class}", not conforming)
 
     def _gen_cmd_argv(self, args: ArgType, prefix) -> Iterable[str]:
-        proxy = _get_type_proxy(args.__class__)
+        arg_class = args.__class__
+        proxy = _get_type_proxy(arg_class)
         for name, arg in proxy.asdict(args).items():
-            default = proxy.field_default(args.__class__, name)
+            default = proxy.field_default(arg_class, name)
             if arg != default:
                 handler_or_proxy, action = self.handler_actions[f'{prefix}{name}']
-                if isinstance(handler_or_proxy, TypeHandler):
-                    yield from handler_or_proxy.gen_cli_arg(action, arg)
-                else:
-                    yield action.option_strings[0]
-                    yield from self._gen_cmd_argv(arg, f'{prefix}{name}.')
+                user_override = getattr(arg_class, f'_{arg_class.__name__}__{name}', {}).get('_serialization', None)
+                yield action.option_strings[0]
+                yield from user_override(arg) if user_override else \
+                    handler_or_proxy.gen_cli_arg(arg) if isinstance(handler_or_proxy, TypeHandler) else \
+                    self._gen_cmd_argv(arg, f'{prefix}{name}.')
 
     @staticmethod
     def get_comments(arg_cls: Type[ArgType]) -> Dict[str, str]:

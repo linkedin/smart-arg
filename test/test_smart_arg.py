@@ -2,12 +2,12 @@
 import os
 import subprocess
 import sys
-from dataclasses import dataclass, FrozenInstanceError
-from math import sqrt
+from contextlib import redirect_stderr
+from dataclasses import dataclass, replace
 from enum import Enum
+from math import sqrt
 from types import SimpleNamespace
 from typing import List, NamedTuple, Tuple, Optional, Dict, Set, Type, Any
-from contextlib import redirect_stderr
 
 import pytest
 
@@ -20,11 +20,16 @@ class MyTupBasic:
     """
     MyTup docstring goes to description
     """
+    def _serialization(a_str):
+        if a_str not in MyTupBasic.__a_str['choices']:
+            raise ValueError
+        yield a_str
+
     a_int: int  # a is int
     a_float: float  # a is float
     a_bool: bool
     a_str: str
-    __a_str = {'choices': ['hello', 'bonjour', 'hola']}  # will overwrite the a_str argument choices
+    __a_str = {'choices': ['hello', 'bonjour', 'hola'], '_serialization': _serialization}  # will overwrite the a_str argument choices and serialization
     b_list_int: List[int]
     b_set_str: Set[str]
     d_tuple_3: Tuple[int, float, bool]
@@ -64,8 +69,10 @@ def test_basic_parse_to_arg():
     assert my_parser._option_string_actions['--a_float'].help == '(float; required)  a is float'
     assert my_parser._option_string_actions['--a_str'].choices == ['hello', 'bonjour', 'hola']
 
-    parsed_arg = MyTupBasic(arg_cmd.split())
+    parsed_arg = MyTupBasic(arg_cmd.split())  # Patched constructor
     assert parsed_arg == my_tup_basic
+
+    pytest.raises(ValueError, replace(parsed_arg, a_str='').__to_argv__, [])  # serialization is overridden
 
 
 muted = redirect_stderr(SimpleNamespace(write=lambda *_: None))
@@ -375,4 +382,4 @@ def test_basic_enum():
     assert my_parser._option_string_actions['--default_color'].choices == Color
 
     arg_cmd2 = ['--a_int', '1', '--my_color_dict', '10:red', '--my_color_list', 'GREEN', '--my_color_tuple', 'BLUE', '100']
-    pytest.raises(SmartArgError, MyEnumBasic.__from_argv__, arg_cmd2)
+    pytest.raises(SmartArgError, MyEnumBasic.__from_argv__, arg_cmd2)  # capital case needed for enum `RED`
