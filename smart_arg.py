@@ -55,7 +55,7 @@ The module contains the following public classes:
 
 All other classes and methods in this module are considered implementation details."""
 
-__version__ = '0.4'
+__version__ = '0.4.*'  # star version should be auto-resolved to concrete number when run setup.py
 __all__ = (
     'arg_suite',
     'custom_arg_suite',

@@ -8,7 +8,7 @@ on:
     types: [created]
 
   push:
-    branches: master
+    branches: [master]
 jobs:
   deploy:
 
@@ -47,8 +47,5 @@ jobs:
         REPO_OWNER: linkedin
       run: |
         python -m pip install --upgrade twine
-        rm -rf dist
-        SMART_ARG_VERSION_DUMP=inline python setup.py sdist
-        export VERSION=$(ls dist|sed -E "s/^smart-arg-(.*)\.tar\.gz$/v\1/")
-        sh tag.sh $VERSION
-        twine upload dist/* --verbose
+
+        bash publish.sh $(python -c "import smart_arg; print(smart_arg.__version__)") smart_arg.py smart-arg
