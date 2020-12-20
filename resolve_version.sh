@@ -1,20 +1,21 @@
-VERSION=$1
+star_version=$1
 
 # detect if local
 [ "x$GITHUB_TOKEN" == "x" ] && local_version=.dev0
 
-if [[ "$VERSION" =~ ^([0-9]+\.){2,3}\*$ ]]; then
-  star_version_prefix=${VERSION%%\*}
+if [[ "$star_version" =~ ^([0-9]+\.){2}\*$ ]]; then
+  star_version_prefix=${star_version%%\*}
 
-  last_matched_tag=$(git describe --match "v$VERSION" --tags HEAD --first-parent --abbrev=0 2>/dev/null)
+  # expect all tags are reachable from HEAD and only one version tag per commit
+  last_matched_tag=$(git describe --match "v$star_version" --tags HEAD --first-parent --abbrev=0 2>/dev/null)
   [ $? -eq 0 ] && patch_version=$((${last_matched_tag##*[!0-9]} + 1));
 
   resolved_version=$star_version_prefix$((patch_version))$local_version
-elif [[ "$VERSION" =~ \* ]]; then
-  printf "Unsupported star version: '%s'\nOnly supports star patch version or subpatch/4th version." "$VERSION" >&2
+elif [[ "$star_version" =~ \* ]]; then
+  printf "Unsupported star version: '%s'\nOnly supports star patch version." "$star_version" >&2
   exit 128
 else
-  resolved_version=$VERSION
+  resolved_version=$star_version
 fi
 
 echo "$resolved_version"
