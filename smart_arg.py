@@ -55,16 +55,7 @@ The module contains the following public classes:
 
 All other classes and methods in this module are considered implementation details."""
 
-__version__ = '0.4.*'  # star version should be auto-resolved to concrete number when run setup.py
-__all__ = (
-    'arg_suite',
-    'custom_arg_suite',
-    'LateInit',
-    'SmartArgError',
-    'TypeHandler',
-    'PrimitiveHandlerAddon',
-)
-
+import pkg_resources
 import logging
 import os
 import sys
@@ -74,6 +65,16 @@ from types import SimpleNamespace as KwargsType
 from typing import Any, Callable, Dict, Generic, Iterable, List, NamedTuple, Optional, Sequence, Tuple, Type, TypeVar, Union
 from enum import EnumMeta, Enum
 
+_base_version = '0.4.*'  # star version should be auto-resolved to concrete number when run setup.py
+__version__ = pkg_resources.get_distribution(__name__).version
+__all__ = (
+    'arg_suite',
+    'custom_arg_suite',
+    'LateInit',
+    'SmartArgError',
+    'TypeHandler',
+    'PrimitiveHandlerAddon',
+)
 ArgType = TypeVar('ArgType', bound=NamedTuple)  # NamedTuple is not a real class bound, but setting `bound` to NamedTuple makes mypy happier
 NoneType = None.__class__
 FieldMeta = NamedTuple('FieldMeta', (('comment', str), ('default', Any), ('type', Type), ('optional', bool)))

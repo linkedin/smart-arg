@@ -1,18 +1,19 @@
 """Argument class <=> Human friendly cli"""
 
 from setuptools import setup
-from smart_arg import __version__
-
-
-with open('README.md', encoding='utf-8') as f:
-    readme = f.read()
 
 # TODO uncomment `doc` usages once set up.
 doc = 'https://smart-arg.readthedocs.io'
+with open('README.md', encoding='utf-8') as f:
+    readme = f.read()
 
 setup(
     name='smart-arg',
-    version=__version__,
+    use_scm_version={
+        "root": ".",
+        "relative_to": __file__
+    },
+    setup_requires=['setuptools_scm'],
     description=__doc__,
     long_description=readme,
     long_description_content_type='text/markdown',
