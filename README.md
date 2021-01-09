@@ -1,4 +1,7 @@
-# Introduction to Smart Argument Suite (`smart-arg`)
+# Smart Argument Suite (`smart-arg`)
+
+[![GitHub tag](https://img.shields.io/github/tag/linkedin/smart-arg.svg)](https://GitHub.com/linkedin/smart-arg/tags/)
+[![PyPI version](https://img.shields.io/pypi/v/smart-arg.svg)](https://pypi.python.org/pypi/smart-arg/)
 
 Smart Argument Suite (`smart-arg`) is a slim and handy Python library that helps one work safely and conveniently 
 with the arguments that are represented by an immutable argument class 
@@ -95,11 +98,11 @@ optional arguments:
   (backed by [argparse.ArgumentParser](https://docs.python.org/3/library/argparse.html#argumentparser-objects)) 
   work its magic around command-line interface. 
 * Always work directly with argument class instances when possible, even if you only need to generate the command-line representation.
-* Stick to the default behavior and the basic features, think twice before using any of the [advanced features](TODO-linked-to-readthedocs).
+* Stick to the default behavior and the basic features, think twice before using any of the [advanced features](https://smart-arg.readthedocs.io/en/latest/advanced.html#advanced-usages).
 
 
 ## More detail
-For more features and implementation detail, please refer to the [documentation](TODO-linked-to-readthedocs).
+For more features and implementation detail, please refer to the [documentation](https://smart-arg.readthedocs.io/).
 
 ## Contributing
 

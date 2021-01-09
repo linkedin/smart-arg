@@ -40,7 +40,7 @@ to be defined, replace any `LateInit` with actual values, or it will fail the in
 allowed after construction, including manually calling `__post_init__`.
 * `__post_init__` of a `NamedTuple` works similar to that of a `dataclass`.
 
-## Supported Argument Classes
+## Supported Argument Container Classes
 ### [`NameTuple`](https://docs.python.org/3.7/library/typing.html?highlight=namedtuple#typing.NamedTuple)
 * Strong immutability
 * Part of the Python distribution  
