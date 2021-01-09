@@ -32,18 +32,20 @@ function resolve_version() {
     [ $? -ne 0 ] || patch_version=$((${last_matched_tag##*[!0-9]} + 1));
 
     resolved_version=$star_version_prefix$((patch_version))
-  elif [[ "$star_version" =~ \* ]]; then
+  elif [[ "$star_version" =~ ^([0-9]+\.){2}[0-9]+$ ]]; then
+    resolved_version=$star_version
+  else
     printf "Unsupported star version: '%s'\nOnly supports star patch version." "$star_version" >&2
     return 127
-  else
-    resolved_version=$star_version
   fi
 
-  echo "Version is resolved to '$resolved_version'." >&2
+  echo "$star_version is resolved to version '$resolved_version'." >&2
   echo "$resolved_version"
 }
 
-version=v$(resolve_version "$1")
+# Set star_version to the first argument or $STAR_VERSION or $($STAR_VERSION_CMD) in this order
+star_version=${1-${STAR_VERSION-$($STAR_VERSION_CMD)}}
+version=v$(resolve_version "$star_version")
 git tag "$version"  # for setuptools-scm
 
 # version may be normalized by setuptools
