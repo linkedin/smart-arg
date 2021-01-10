@@ -63,6 +63,5 @@ jobs:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.pypi_token }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          STAR_VERSION_CMD: python -c "import smart_arg; print(smart_arg._base_version)"
         run: |
-          bash publish.sh
+          bash publish.sh $(python -c "import smart_arg; print(smart_arg._base_version)")

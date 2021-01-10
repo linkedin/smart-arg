@@ -10,8 +10,8 @@ with open('README.md', encoding='utf-8') as f:
 setup(
     name='smart-arg',
     use_scm_version={
-        "root": ".",
-        "relative_to": __file__
+        'root': '.',
+        'relative_to': __file__
     },
     setup_requires=['setuptools_scm'],
     description=__doc__,
@@ -34,7 +34,7 @@ setup(
         'Programming Language :: Python :: 3',
         'Operating System :: OS Independent',
         'License :: OSI Approved',
-        "Typing :: Typed"
+        'Typing :: Typed'
     ],
     keywords=[
         'typing',
