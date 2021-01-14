@@ -322,7 +322,7 @@ class _namedtuple:  # TODO expand lambdas to static methods or use a better hold
         new_instance = arg_class.__original_new__(arg_class, **kwargs)
         post_init = getattr(arg_class, '__post_init__', None)
         if post_init:
-            fake_namedtuple = KwargsType(**new_instance._asdict())
+            fake_namedtuple = KwargsType(**new_instance._asdict())  # hack: KwargsType is actually SimpleNamespace
             post_init(fake_namedtuple)  # make the faked NamedTuple mutable in post_init only while initialization
             new_instance = arg_class.__original_new__(arg_class, **vars(fake_namedtuple))
         arg_class.__arg_suite__.post_validation(new_instance)
@@ -336,7 +336,7 @@ class _namedtuple:  # TODO expand lambdas to static methods or use a better hold
                                and all(type(n) == str for n in f) and all(type(n) == str for n, _ in f_t.items())) else None
     asdict = lambda args: args._asdict()
     field_default = lambda arg_class, raw_arg_name: arg_class._field_defaults.get(raw_arg_name, MISSING)
-    patch = _black_hole
+    patch = _black_hole  # No need to patch
 
 
 class _dataclasses:
@@ -350,7 +350,7 @@ class _dataclasses:
 
         def init(self, *args, **kwargs):
             if args and hasattr(self, '__frozen__'):
-                logger.debug(f"Assuming {self} is from patch new with __from_argv__, already initialized, skipping init.")
+                logger.debug(f"Assuming {self} is from the patched __new__ with __from_argv__, already initialized, skipping init.")
                 return
             self.__original_init__(*args, **kwargs)
             object.__setattr__(self, '__frozen__', True)
