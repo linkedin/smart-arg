@@ -30,7 +30,7 @@ from typing import NamedTuple, List, Tuple, Dict, Optional
 from smart_arg import arg_suite
 
 
-# Define the argument 
+# Define the argument container class
 @arg_suite
 class MyArg(NamedTuple):
     """
@@ -47,7 +47,7 @@ class MyArg(NamedTuple):
 
 
 def cli_interfaced_job_scheduler():
-    # Create the argument instance
+    # Create the argument container instance
     my_arg = MyArg(nn=[3], a_tuple=("str", 1), encoder='lstm', h_param={}, adp=False)  # The patched argument class requires keyword arguments to instantiate the class
 
     # Serialize the argument to command-line representation
@@ -60,7 +60,7 @@ def cli_interfaced_job_scheduler():
 
 
 # my_job.py
-# Deserialize the command-line representation of the argument back to an instance 
+# Deserialize the command-line representation of the argument back to a container instance 
 my_arg: MyArg = MyArg.__from_argv__(sys.argv[1:])  # Equivalent to `MyArg(None)`, one positional arg required to indicate the arg is a command-line representation.
 print(my_arg)
 # MyArg(nn=[3], a_tuple=('str', 1), encoder='lstm', h_param={}, batch_size=None, adp=False, embedding_dim=100, lr=0.001)

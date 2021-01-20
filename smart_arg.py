@@ -10,15 +10,12 @@ This module is an argument serialization and deserialization library that:
 
 The following is a simple usage example::
 
-    # Define the argument class:
+    # Define the argument container class:
     @arg_suite
     class MyArg(NamedTuple):
         '''MyArg is smart and the docstring goes to description'''
 
         nn: List[int]  # Comments go to ArgumentParser argument help
-        # Each named (without "_" prefix) and fully typed attribute will be turned into an ArgumentParser.add_argument
-        # DISCOURAGED: This only overrides one-way conversion (deserialization of cli) behavior and introduces inconsistencies.
-        _nn = {'choices': (200, 300)}  # (Advanced feature) Optional user supplement/override for `ArgumentParser.add_argument("--nn", **(kwargs|_nn))`
 
         a_tuple: Tuple[str, int]  # Arguments without defaults are treated as "required = True"
         h_param: Dict[str, int]  # Also supports List, Set
@@ -29,10 +26,10 @@ The following is a simple usage example::
         n: Optional[int] = None  # Optional can only default to `None`
 
 
-    # Create the corresponding argument class instance from the command line argument list:
+    # Create the corresponding argument container class instance from the command line argument list:
     # by using
     arg: ArgClass = ArgClass.__from_argv__(sys.argv[1:])  # with factory method, need the manual type hint `:ArgClass` to help IDE
-    # or the monkey-patched constructor of the annotated argument class
+    # or the monkey-patched constructor of the annotated argument container class
     arg = ArgClass(sys.argv[1:])  # with monkey-patched constructor with one positional argument, no manual hint needed
 
     # Create a NamedTuple argument instance and generate its command line counterpart:
@@ -56,18 +53,19 @@ The module contains the following public classes/functions:
 
 All other classes and methods in this module are considered implementation details."""
 
-import pkg_resources
 import logging
 import os
 import sys
-import warnings
 from argparse import Action, ArgumentParser
 from collections import abc
-from types import SimpleNamespace as KwargsType
-from typing import Any, Callable, Dict, Generic, Iterable, List, NamedTuple, Optional, Sequence, Tuple, Type, TypeVar, Union
 from enum import EnumMeta, Enum
+from types import SimpleNamespace
+from typing import Any, Callable, Dict, Generic, Iterable, List, NamedTuple, Optional, Sequence, Tuple, Type, TypeVar, Union
+from warnings import warn
 
-_base_version = '0.4.*'  # star version should be auto-resolved to concrete number when run setup.py
+import pkg_resources
+
+_base_version = '1.0.*'  # star version should be auto-resolved to concrete number when run setup.py
 __version__ = pkg_resources.get_distribution(__name__).version
 __all__ = (
     'arg_suite',
@@ -78,9 +76,11 @@ __all__ = (
     'TypeHandler',
     'PrimitiveHandlerAddon',
 )
-ArgType = TypeVar('ArgType', bound=NamedTuple)  # NamedTuple is not a real class bound, but setting `bound` to NamedTuple makes mypy happier
+
+ArgType = TypeVar('ArgType', bound=NamedTuple)  # NamedTuple is not a real class bound, but this makes mypy happier
 NoneType = None.__class__
 FieldMeta = NamedTuple('FieldMeta', (('comment', str), ('default', Any), ('type', Type), ('optional', bool)))
+KwargsType = SimpleNamespace
 
 logger = logging.getLogger(__name__)
 SMART_ARG_LOG_LEVEL = 'SMART_ARG_LOG_LEVEL'
@@ -88,7 +88,7 @@ if SMART_ARG_LOG_LEVEL in os.environ:
     logger.addHandler(logging.StreamHandler())
     log_level = os.environ[SMART_ARG_LOG_LEVEL].upper()
     logger.setLevel(log_level)
-    logger.info(f"Detected environment var `{SMART_ARG_LOG_LEVEL}, set log level to '{log_level}' and log to stream.")
+    logger.info(f"Detected environment var 'SMART_ARG_LOG_LEVEL', set log level to '{log_level}' and log to stream.")
 
 if sys.version_info >= (3, 8):
     from typing import get_origin, get_args
@@ -102,17 +102,17 @@ elif sys.version_info >= (3, 6):
     get_origin, get_args = lambda tp: getattr(tp, '__extra__', ()) or getattr(tp, '__origin__', None), lambda tp: getattr(tp, '__args__', ()) or []
 else:
     try:
-        warnings.warn(f"Unsupported and untested python version {sys.version_info} < 3.6. "
-                      f"The package may or may not work properly. "
-                      f"Try 'from typing_inspect import get_origin, get_args' now.")
+        warn(f"Unsupported and untested python version {sys.version_info} < 3.6. "
+             f"The package may or may not work properly. "
+             f"Try 'from typing_inspect import get_origin, get_args' now.")
         from typing_inspect import get_args, get_origin
     except ImportError:
-        warnings.warn(f"`from typing_inspect import get_origin, get_args` failed for "
-                      f"unsupported python version {sys.version_info} < 3.6. It might work with 'pip install typing_inspect'.")
+        warn(f"`from typing_inspect import get_origin, get_args` failed for "
+             f"unsupported python version {sys.version_info} < 3.6. It might work with 'pip install typing_inspect'.")
         raise
 
 frozenlist = tuple  # tuple to simulate an immutable list. [https://www.python.org/dev/peps/pep-0603/#rationale]
-_black_hole = lambda *args, **kwargs: None
+_black_hole = lambda *_, **__: None
 _mro_all = lambda arg_class, get_dict: {k: v for b in (*arg_class.__mro__[-1:0:-1], arg_class) if b.__module__ != 'builtins' for k, v in get_dict(b).items()}
 # note: Fields without type annotation won't be regarded as a property/entry _fields.
 _annotations = lambda arg_class: _mro_all(arg_class, lambda b: getattr(b, '__annotations__', {}))
@@ -322,7 +322,7 @@ class _namedtuple:  # TODO expand lambdas to static methods or use a better hold
         new_instance = arg_class.__original_new__(arg_class, **kwargs)
         post_init = getattr(arg_class, '__post_init__', None)
         if post_init:
-            fake_namedtuple = KwargsType(**new_instance._asdict())  # hack: KwargsType is actually SimpleNamespace
+            fake_namedtuple = SimpleNamespace(**new_instance._asdict())
             post_init(fake_namedtuple)  # make the faked NamedTuple mutable in post_init only while initialization
             new_instance = arg_class.__original_new__(arg_class, **vars(fake_namedtuple))
         arg_class.__arg_suite__.post_validation(new_instance)
@@ -383,22 +383,22 @@ class ArgSuite(Generic[ArgType]):
     """Generates the corresponding `ArgumentParser` and handles the two-way conversions."""
     @staticmethod
     def new_arg(arg_class, *args, **kwargs):
-        """Monkey-Patched argument class __new__.
+        """Monkey-Patched argument container class __new__.
         If any positional arguments exist, it would assume that the user is trying to parse a sequence of strings.
         It would also assume there is only one positional argument, and raise an `SmartArgError` otherwise.
-        If no positional arguments exist, it would call the argument class instance creator with all keyword arguments.
+        If no positional arguments exist, it would call the argument container class instance creator with all keyword arguments.
 
         :param arg_class: Decorated class
         :param args: Optional positional argument, to be parsed to the arg_class type.
                `args[0]`: a optional marker to mark the sub-sequence of `argv` to be parsed by the parser. ``None`` will
                 be interpreted as ``sys.argv[1:]``
-               `args[1]`: default to `None`, indicating using the default separator for the argument class
+               `args[1]`: default to `None`, indicating using the default separator for the argument container class
 
         :type `(Optional[Sequence[str]], Optional[str])`
-        :param kwargs: Optional keyword arguments, to be passed to the argument class specific instance creator."""
+        :param kwargs: Optional keyword arguments, to be passed to the argument container class specific instance creator."""
         logger.info(f"Patched new for {arg_class} is called with {args} and {kwargs}.")
         if args:
-            warnings.warn(f"Calling the patched constructor of {arg_class} with argv is deprecated, please use {arg_class}.__from_argv__ instead.")
+            warn(f"Calling the patched constructor of {arg_class} with argv is deprecated, please use {arg_class}.__from_argv__ instead.")
             # TODO Exception handling with helpful error message
             _raise_if(f"Calling '{arg_class}(positional {args}, keyword {kwargs})' is not allowed:\n"
                       f"Only accept positional arguments to parse to the '{arg_class}'\nkeyword arguments can only be used to create an instance directly.",
@@ -411,11 +411,11 @@ class ArgSuite(Generic[ArgType]):
 
     def __init__(self, type_handlers: Sequence[TypeHandler], arg_class):
         type_proxy = _get_type_proxy(arg_class)
-        _raise_if(f"Unsupported argument class {arg_class}.", not type_proxy)
+        _raise_if(f"Unsupported argument container class {arg_class}.", not type_proxy)
         self.handlers = type_handlers
         self.handler_actions: Dict[str, Tuple[Union[TypeHandler, Type], Action]] = {}
         type_proxy.patch(arg_class)
-        #  A big assumption here is that the argument classes never override __new__
+        #  A big assumption here is that the argument container classes never override __new__
         if not hasattr(arg_class, '__original_new__'):
             arg_class.__original_new__ = arg_class.__new__
         arg_class.__new__ = ArgSuite.new_arg
@@ -432,7 +432,7 @@ class ArgSuite(Generic[ArgType]):
     def _validate_fields(arg_class: Type) -> None:
         """Validate fields in `arg_class`.
 
-        :raise: SmartArgError if the decorated argument class has non-typed field with defaults and such field
+        :raise: SmartArgError if the decorated argument container class has non-typed field with defaults and such field
                 does not startswith "_" to overwrite the existing argument field property."""
         arg_fields = _annotations(arg_class).keys()
         invalid_fields = tuple(filter(lambda s: s.endswith('_'), arg_fields))
@@ -449,8 +449,8 @@ class ArgSuite(Generic[ArgType]):
         """Add argument to the self._parser for each field in the self._arg_class
         :raise: SmartArgError if cannot find corresponding handler for the argument type"""
         suite: ArgSuite = getattr(arg_class, '__arg_suite__', None)
-        _raise_if(f"Recursively nested argument class '{arg_class}' is not supported.", arg_class in arg_classes)
-        _raise_if(f"Nested argument class '{arg_class}' with '__post_init__' expected to be decorated.",
+        _raise_if(f"Recursively nested argument container class '{arg_class}' is not supported.", arg_class in arg_classes)
+        _raise_if(f"Nested argument container class '{arg_class}' with '__post_init__' expected to be decorated.",
                   not (suite and suite._arg_class is arg_class) and hasattr(arg_class, '__post_init__'))
         self._validate_fields(arg_class)
         comments = _mro_all(arg_class, self.get_comments_from_source)
@@ -490,6 +490,7 @@ class ArgSuite(Generic[ArgType]):
     @staticmethod
     def strip_argv(separator: str, argv: Optional[Sequence[str]]) -> Sequence[str]:
         """Strip any elements outside of `{separator}+` and `{separator}-` of `argv`.
+        :param separator: A string marker prefix to mark the boundaries of the belonging arguments in argv
         :param argv: Input argument list, treated as `sys.argv[1:]` if `None`
         :return: Stripped `argv`"""
         if argv is None:
@@ -503,7 +504,7 @@ class ArgSuite(Generic[ArgType]):
                 b, e = argv.index(l_s), argv.index(r_s)
                 if e > b:
                     return argv[b + 1: e]
-        raise SmartArgError(f"Expecting up to 1 pair of separator '{l_s}' and '{r_s}' in {argv}")
+        raise SmartArgError(f"Expecting up to 1 pair of separator markers'{l_s}' and '{r_s}' in {argv}")
 
     def parse_to_arg(self, argv: Optional[Sequence[str]] = None, separator: Optional[str] = '', *, error_on_unknown: bool = True) -> ArgType:
         """Parse the command line to decorated ArgType
@@ -557,7 +558,7 @@ class ArgSuite(Generic[ArgType]):
                 try:
                     conforming = isinstance(attr, arg_type)  # e.g. list and List
                 except TypeError:  # best effort to check the instance type
-                    logger.warning(f"Unable to check if {attr!r} is of type {t} for field {name!r} of argument class {arg_class}")
+                    logger.warning(f"Unable to check if {attr!r} is of type {t} for field {name!r} of argument container class {arg_class}")
                     conforming = True
                 _raise_if(f"Field {name!r} has value of {attr!r} of type {attr_class} which is not of the expected type '{t}' for {arg_class}", not conforming)
 
@@ -605,7 +606,7 @@ class ArgSuite(Generic[ArgType]):
         """Generate the command line arguments
 
         :param separator: separator marker, empty str to disable, None to default to class name
-        :param arg: the annotated argument class object
+        :param arg: the annotated argument container class object
         :return: command line sequence"""
         argv = self._gen_cmd_argv(arg, '')
         if separator is None:
@@ -638,7 +639,7 @@ class ArgSuiteDecorator:
 
     :param primitive_handler_addons: the primitive types handling in addition to the provided primitive type basic operations
     :param type_handlers: the types handling in addition to the provided types handling.
-    :return: the argument class decorator"""
+    :return: the argument container class decorator"""
     def __init__(self, type_handlers: Sequence[Type[TypeHandler]] = (), primitive_handler_addons: Sequence[Type[PrimitiveHandlerAddon]] = ()) -> None:
         addons = (*primitive_handler_addons, PrimitiveHandlerAddon)
         self.handlers = tuple(handler(addons) for handler in (*type_handlers, PrimitiveHandler, CollectionHandler, DictHandler, TupleHandler))
@@ -649,4 +650,4 @@ class ArgSuiteDecorator:
 
 
 custom_arg_suite = ArgSuiteDecorator  # Snake case decorator alias for the class name in camel case
-arg_suite = custom_arg_suite()  # Default argument class decorator to expose smart arg functionalities.
+arg_suite = custom_arg_suite()  # Default argument container class decorator to expose smart arg functionalities.

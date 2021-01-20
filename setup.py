@@ -2,7 +2,6 @@
 
 from setuptools import setup
 
-# TODO uncomment `doc` usages once set up.
 doc = 'https://smart-arg.readthedocs.io'
 with open('README.md', encoding='utf-8') as f:
     readme = f.read()
@@ -19,10 +18,10 @@ setup(
     long_description_content_type='text/markdown',
     license='BSD-2-CLAUSE',
     python_requires='>=3.6',
-    # url=doc,
+    url=doc,
     download_url='https://pypi.python.org/pypi/smart-arg',
     project_urls={
-        # 'Documentation': doc,
+        'Documentation': doc,
         'Source': 'https://github.com/linkedin/smart-arg.git',
         'Tracker': 'https://github.com/linkedin/smart-arg/issues',
     },

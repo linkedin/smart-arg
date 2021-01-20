@@ -1,7 +1,8 @@
 ## More Features
 ### Post processing & validation
 
-A user can define a method in the argument class to do post processing after the argument is created.
+A user can define a method in the argument container class to do post processing after the argument is created bt
+before returned to the caller.
 For example, when a field's default value depends on some other input fields, one could use a default
 placeholder `LateInit`, and a `__post_init__` function to define the actual value. 
 
@@ -53,7 +54,7 @@ allowed after construction, including manually calling `__post_init__`.
 * Native `__post_init__` support
 ## Advanced Usages
 
-By default, `smart-arg` supports the following types as fields of an argument class:
+By default, `smart-arg` supports the following types as fields of an argument container class:
 * primitives: `int`, `float`, `bool`, `str`, `enum.Enum`
 * `Tuple`: elements of the tuple are expected to be primitives
 * `Sequence`/`Set`: `Sequence[int]`, `Sequence[float]`, `Sequence[bool]`, `Sequence[str]`, `Sequence[enum.Enum]`, `Set[int]`, `Set[float]`, `Set[bool]`, `Set[str]`, `Set[enum.Enum]`
@@ -63,7 +64,7 @@ By default, `smart-arg` supports the following types as fields of an argument cl
 * `Optional[AnyOtherSupportedType]`: Beware that any optional field is required to **default to `None`**.
 
 ### override argument Ser/De
-A user can change the parsing behavior of certain field of an argument class.
+A user can change the parsing behavior of certain field of an argument container class.
 One can only do this when the field's type is already supported by `smart-arg`.  
 
 
@@ -73,7 +74,7 @@ The key '_serialization' defines an [`iterator/generator`](https://wiki.python.o
 for deserialization/parsing.
 
 <font color='red'>ALERT:</font> this can lead to **inconsistent behaviors** when one also generates the command-line
-representation of an argument class instance, since it can only modify the deserialization 
+representation of an argument container class instance, since it can only modify the deserialization 
 behavior from the command-line representation.
 ```python
 from typing import NamedTuple, Sequence
