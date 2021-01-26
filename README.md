@@ -21,8 +21,12 @@ The [`smart-arg`](https://pypi.org/project/smart-arg/) package is available thro
 pip3 install smart-arg
 ```
 
-Users can define their argument container class -- a `NamedTuple` or `dataclass` with `smart-arg` decorator `@arg_suite` in their Python scripts 
-and pass a class instance through the command-line interface.
+Users can bring or define, if not already, their argument container class -- a `NamedTuple` or `dataclass`,
+and then annotate it with `smart-arg` decorator `@arg_suite` in their Python scripts.
+
+Now an argument container class instance, e.g. `my_arg` of `MyArg` class, once created, is ready to be serialized by the `smart-arg` API --
+`my_arg.__to_argv__()` to a sequence of strings, passed through the command-line interface 
+and then deserialized back to an instance again by `my_arg = MyArg.__from_argv__(sys.argv[1:])`.
 
 ```python
 import sys

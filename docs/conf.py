@@ -21,7 +21,7 @@ master_doc = 'index'
 project = u'Smart Argument Suite'
 
 # General information about the project.
-copyright = u'{year}, LinkedIn'.format(year=datetime.datetime.today().year)
+copyright = f'{datetime.datetime.today().year}, LinkedIn'
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
