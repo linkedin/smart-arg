@@ -3,7 +3,7 @@
 This module is an argument serialization and deserialization library that:
 
     - handles two-way conversions: a typed, preferably immutable argument container object
-    (a `NamedTuple` or `dataclass` instance) <==> a command-line argv
+      (a `NamedTuple` or `dataclass` instance) <==> a command-line argv
     - enables IDE type hints and code auto-completion by using `NamedTuple` or `dataclass`
     - promotes type-safety of cli-ready arguments
 
@@ -145,7 +145,7 @@ def _first_handles(with_handles, arg_type, default: Optional[bool] = None):
 
 
 class PrimitiveHandlerAddon:
-    """Primitive handler addon defines some basic operations on primitive types. Only `staticmethod`s are expected.
+    """Primitive handler addon defines some basic operations on primitive types. Only `staticmethod` is expected.
     Users can extend/modify the primitive handling by inheriting this class."""
     @staticmethod
     def build_type(arg_type: Type) -> Union[Type, Callable[[str], Any]]:
@@ -396,7 +396,7 @@ class ArgSuite(Generic[ArgType]):
 
         :type `(Optional[Sequence[str]], Optional[str])`
         :param kwargs: Optional keyword arguments, to be passed to the argument container class specific instance creator."""
-        logger.info(f"Patched new for {arg_class} is called with {args} and {kwargs}.")
+        logger.info(f"Patched __new__ for {arg_class} is called with {args} and {kwargs}.")
         if args:
             warn(f"Calling the patched constructor of {arg_class} with argv is deprecated, please use {arg_class}.__from_argv__ instead.")
             # TODO Exception handling with helpful error message
