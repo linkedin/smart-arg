@@ -4,7 +4,7 @@
 [![PyPI version](https://img.shields.io/pypi/v/smart-arg.svg)](https://pypi.python.org/pypi/smart-arg/)
 
 Smart Argument Suite (`smart-arg`) is a slim and handy Python library that helps one work safely and conveniently 
-with the arguments that are represented by an immutable argument class 
+with the arguments that are represented by an immutable argument container class' fields 
 ([`NamedTuple`](https://docs.python.org/3.7/library/typing.html?highlight=namedtuple#typing.NamedTuple) or 
 [`dataclass`](https://docs.python.org/3.7/library/dataclasses.html#dataclasses.dataclass) out-of-box),
 and passed through command-line interfaces.
@@ -21,8 +21,8 @@ The [`smart-arg`](https://pypi.org/project/smart-arg/) package is available thro
 pip3 install smart-arg
 ```
 
-Users can define their argument -- a `NamedTuple` or `dataclass` class with `smart-arg` decorator `@arg_suite` in their Python scripts 
-and pass it through the command-ine interface.
+Users can define their argument container class -- a `NamedTuple` or `dataclass` with `smart-arg` decorator `@arg_suite` in their Python scripts 
+and pass a class instance through the command-line interface.
 
 ```python
 import sys
@@ -47,8 +47,12 @@ class MyArg(NamedTuple):
 
 
 def cli_interfaced_job_scheduler():
+    """
+    This is to be called by the job scheduler to set up the job launching command,
+    i.e., producer side of the Python job arguments
+    """
     # Create the argument container instance
-    my_arg = MyArg(nn=[3], a_tuple=("str", 1), encoder='lstm', h_param={}, adp=False)  # The patched argument class requires keyword arguments to instantiate the class
+    my_arg = MyArg(nn=[3], a_tuple=("str", 1), encoder='lstm', h_param={}, adp=False)  # The patched argument container class requires keyword arguments to instantiate the class
 
     # Serialize the argument to command-line representation
     argv = my_arg.__to_argv__()
@@ -59,17 +63,25 @@ def cli_interfaced_job_scheduler():
     # my_job.py --nn 3 --a_tuple str 1 --encoder lstm --h_param --batch_size None --adp False --embedding_dim 100 --lr 0.001
 
 
+def my_job(my_arg: MyArg):
+    """
+    This is the actual job defined by the input argument my_arg,
+    i.e., consumer side of the Python job arguments
+    """
+    print(my_arg)
+    # MyArg(nn=[3], a_tuple=('str', 1), encoder='lstm', h_param={}, batch_size=None, adp=False, embedding_dim=100, lr=0.001)
+    
+    # `my_arg` can be used in later script with a typed manner, which help of IDEs (type hints and auto completion)
+    # ...
+    print(f"My network has {len(my_arg.nn)} layers with sizes of {my_arg.nn}.")
+    # My network has 1 layers with sizes of [3].
+
+
 # my_job.py
-# Deserialize the command-line representation of the argument back to a container instance 
-my_arg: MyArg = MyArg.__from_argv__(sys.argv[1:])  # Equivalent to `MyArg(None)`, one positional arg required to indicate the arg is a command-line representation.
-print(my_arg)
-# MyArg(nn=[3], a_tuple=('str', 1), encoder='lstm', h_param={}, batch_size=None, adp=False, embedding_dim=100, lr=0.001)
-
-# `my_arg` can be used in later script with a typed manner, which help of IDEs (type hints and auto completion)
-# ...
-print(f"My network has {len(my_arg.nn)} layers with sizes of {my_arg.nn}.")
-# My network has 1 layers with sizes of [3].
-
+if __name__ == '__main__':
+    # Deserialize the command-line representation of the argument back to a container instance 
+    arg_deserialized: MyArg = MyArg.__from_argv__(sys.argv[1:])  # Equivalent to `MyArg(None)`, one positional arg required to indicate the arg is a command-line representation.
+    my_job(arg_deserialized)
 ```
 
 ```shell-session
@@ -97,7 +109,7 @@ optional arguments:
 * Focus on defining the arguments diligently, and let the `smart-arg` 
   (backed by [argparse.ArgumentParser](https://docs.python.org/3/library/argparse.html#argumentparser-objects)) 
   work its magic around command-line interface. 
-* Always work directly with argument class instances when possible, even if you only need to generate the command-line representation.
+* Always work directly with argument container class instances when possible, even if you only need to generate the command-line representation.
 * Stick to the default behavior and the basic features, think twice before using any of the [advanced features](https://smart-arg.readthedocs.io/en/latest/advanced.html#advanced-usages).
 
 
