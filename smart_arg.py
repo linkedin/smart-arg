@@ -165,15 +165,15 @@ class PrimitiveHandlerAddon:
     @staticmethod
     def build_metavar(arg_type: Type) -> str:
         """Define the hint string in argument help message for `arg_type`."""
-        return '{True, False}' if arg_type == bool else \
-            f"{{{', '.join(str(c) for c in arg_type._member_names_)}}}" if type(arg_type) == EnumMeta else \
+        return '{True, False}' if arg_type is bool else \
+            f"{{{', '.join(str(c) for c in arg_type._member_names_)}}}" if type(arg_type) is EnumMeta else \
             arg_type.__name__
 
     @staticmethod
     def build_choices(arg_type) -> Optional[Iterable[Any]]:
         """Enumerate `arg_type` if possible, or return `None`."""
-        return (True, False) if arg_type == bool else \
-            arg_type if type(arg_type) == EnumMeta else \
+        return (True, False) if arg_type is bool else \
+            arg_type if type(arg_type) is EnumMeta else \
             None
 
     @staticmethod
@@ -275,7 +275,7 @@ class TupleHandler(TypeHandler):
         kwargs.type = TupleHandler.__BuildType(types, self.primitive_addons)
 
     def handles(self, t: Type) -> bool:
-        return get_origin(t) == tuple and get_args(t)  # type: ignore
+        return get_origin(t) is tuple and get_args(t)  # type: ignore
 
 
 class CollectionHandler(TypeHandler):
@@ -293,7 +293,7 @@ class CollectionHandler(TypeHandler):
 
 class DictHandler(TypeHandler):
     def _build_other(self, kwargs, arg_type) -> None:
-        addon_method = lambda type, method: getattr(_first_handles(self.primitive_addons, type), method)(type)  # Find the addon for a type and a method
+        addon_method = lambda t, method: getattr(_first_handles(self.primitive_addons, t), method)(t)  # Find the addon for a type and a method
         kv_apply = lambda method, arg_types=get_args(arg_type): (addon_method(arg_types[0], method), addon_method(arg_types[1], method))  # Apply on k/v pair
         k_type, v_type = kv_apply('build_type')
         kwargs.nargs = '*'
@@ -311,7 +311,7 @@ class DictHandler(TypeHandler):
 
     def handles(self, t: Type) -> bool:
         args, addons = get_args(t), self.primitive_addons
-        return len(args) == 2 and get_origin(t) == dict and _first_handles(addons, args[0], False) and _first_handles(addons, args[1], False)
+        return len(args) == 2 and get_origin(t) is dict and _first_handles(addons, args[0], False) and _first_handles(addons, args[1], False)
 
 
 class _namedtuple:  # TODO expand lambdas to static methods or use a better holder representation
@@ -332,8 +332,8 @@ class _namedtuple:  # TODO expand lambdas to static methods or use a better hold
     def proxy(t: Type):
         """:return This proxy class if `t` is a `NamedTuple` or `None`"""
         b, f, f_t = getattr(t, '__bases__', []), getattr(t, '_fields', []), getattr(t, '__annotations__', {})
-        return _namedtuple if (len(b) == 1 and b[0] == tuple and isinstance(f, tuple) and isinstance(f_t, dict)
-                               and all(type(n) == str for n in f) and all(type(n) == str for n, _ in f_t.items())) else None
+        return _namedtuple if (len(b) == 1 and b[0] is tuple and isinstance(f, tuple) and isinstance(f_t, dict)
+                               and all(type(n) is str for n in f) and all(type(n) is str for n, _ in f_t.items())) else None
     asdict = lambda args: args._asdict()
     field_default = lambda arg_class, raw_arg_name: arg_class._field_defaults.get(raw_arg_name, MISSING)
     patch = _black_hole  # No need to patch
@@ -374,7 +374,7 @@ def _get_type_proxy(arg_class):
 
 def _unwrap_optional(arg_type):
     type_origin, type_args, optional = get_origin(arg_type), get_args(arg_type), False
-    if type_origin == Union and len(type_args) == 2 and type_args[1] == NoneType:  # `Optional` support
+    if type_origin is Union and len(type_args) == 2 and type_args[1] is NoneType:  # `Optional` support
         arg_type, optional = type_args[0], True  # Unwrap `Optional` and validate
     return arg_type, optional
 
@@ -399,7 +399,6 @@ class ArgSuite(Generic[ArgType]):
         logger.info(f"Patched __new__ for {arg_class} is called with {args} and {kwargs}.")
         if args:
             warn(f"Calling the patched constructor of {arg_class} with argv is deprecated, please use {arg_class}.__from_argv__ instead.")
-            # TODO Exception handling with helpful error message
             _raise_if(f"Calling '{arg_class}(positional {args}, keyword {kwargs})' is not allowed:\n"
                       f"Only accept positional arguments to parse to the '{arg_class}'\nkeyword arguments can only be used to create an instance directly.",
                       kwargs or len(args) > 2 or len(args) == 2 and args[1].__class__ not in (NoneType, str)
@@ -522,7 +521,7 @@ class ArgSuite(Generic[ArgType]):
                     value = arg_dict.get(arg_name, MISSING)
                     type_origin = get_origin(arg_type)
                     type_args = get_args(arg_type)
-                    type_to_new = get_origin(type_args[0]) if type_origin == Union and len(type_args) == 2 and type_args[1] == NoneType else type_origin
+                    type_to_new = get_origin(type_args[0]) if type_origin is Union and len(type_args) == 2 and type_args[1] is NoneType else type_origin
                     # argparse reading variable length arguments are all lists, need to apply the origin type for the conversion to correct type.
                     value = type_to_new(value) if value is not None and isinstance(value, List) else value  # type: ignore
                 else:  # deal with nested container
@@ -546,12 +545,12 @@ class ArgSuite(Generic[ArgType]):
             _raise_if(f"Field '{name}' is still not initialized after post processing for {arg_class}", attr is LateInit)
             attr_class = attr.__class__
             type_origin, type_args = get_origin(t), get_args(t)
-            if _get_type_proxy(t) or type_origin == Union and len(type_args) == 2 and type_args[1] == NoneType and _get_type_proxy(type_args[0]):
+            if _get_type_proxy(t) or type_origin is Union and len(type_args) == 2 and type_args[1] is NoneType and _get_type_proxy(type_args[0]):
                 _raise_if(f"Field {name}' value of {attr}:{attr_class} is not of the expected type '{t}' for {arg_class}", attr_class not in (t, *type_args))
                 self.post_validation(attr, f'{prefix}{name}.')
             else:
                 arg_type = get_origin(t) or t
-                if arg_type == get_origin(Optional[Any]):
+                if arg_type is get_origin(Optional[Any]):
                     arg_type = get_args(t)
                 if arg_type is list and isinstance(attr, tuple) or arg_type is set and isinstance(attr, frozenset):  # allow for immutable replacements
                     continue
