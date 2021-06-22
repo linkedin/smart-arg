@@ -33,11 +33,12 @@ jobs:
         flake8 smart_arg.py
     - name: mypy
       run: |
+        pip install types-pkg_resources
+        [ ${{ matrix.python-version }} == 3.6 ] && pip install dataclasses types-dataclasses
         pip install mypy
         mypy
     - name: Test with pytest
       run: |
-        [ ${{ matrix.python-version }} == 3.6 ] && pip install dataclasses
         pip install pytest
         pytest
 
