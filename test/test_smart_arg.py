@@ -28,8 +28,11 @@ class MyTupBasic:
     a_int: int  # a is int
     a_float: float  # a is float
     a_bool: bool
-    a_str: str
-    __a_str = {'choices': ['hello', 'bonjour', 'hola'], '_serialization': _serialization}  # will overwrite the a_str argument choices and serialization
+    a_str: str  # comment will NOT go to a_str's help
+    _comment_in_help = """
+    multiline override
+    trailing comment in help"""
+    __a_str = {'choices': ['hello', 'bonjour', 'hola'], '_serialization': _serialization, '_comment_to_help': _comment_in_help}  # will overwrite the a_str argument choices, serialization and comment
     b_list_int: List[int]
     b_set_str: Set[str]
     d_tuple_3: Tuple[int, float, bool]
@@ -73,6 +76,7 @@ def test_basic_parse_to_arg():
     assert my_parser._option_string_actions['--a_int'].help == '(int; required)  a is int'
     assert my_parser._option_string_actions['--a_float'].help == '(float; required)  a is float'
     assert my_parser._option_string_actions['--a_str'].choices == ['hello', 'bonjour', 'hola']
+    assert my_parser._option_string_actions['--a_str'].help == f"(str; required) {MyTupBasic._comment_in_help}"
 
     parsed_arg = MyTupBasic(arg_cmd.split())  # Patched constructor
     assert parsed_arg == my_tup_basic

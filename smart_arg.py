@@ -65,7 +65,7 @@ from warnings import warn
 
 import pkg_resources
 
-_base_version = '1.0.*'  # star version should be auto-resolved to concrete number when run setup.py
+_base_version = '1.1.*'  # star version should be auto-resolved to concrete number when run setup.py
 __version__ = pkg_resources.get_distribution(__name__).version
 __all__ = (
     'arg_suite',
@@ -473,9 +473,10 @@ class ArgSuite(Generic[ArgType]):
                                         help=f"nested argument container marker{'' if default in (LateInit, MISSING) else f'; default: {default}'}")
                 else:
                     handler = _first_handles(self.handlers, arg_type)
-                    field_meta = FieldMeta(comment=comments.get(raw_arg_name, ''), default=default, type=arg_type, optional=optional)
-                    kwargs = handler.gen_kwargs(field_meta, parent_required)
                     user_override: dict = getattr(arg_class, f'_{arg_class.__name__}__{raw_arg_name}', {})
+                    comment = user_override.pop('_comment_to_help', comments.get(raw_arg_name, ''))
+                    field_meta = FieldMeta(comment=comment, default=default, type=arg_type, optional=optional)
+                    kwargs = handler.gen_kwargs(field_meta, parent_required)
                     if user_override.get('choices', None):
                         logger.info(f"Instead of defining `choices`, please consider using Enum for {arg_name}")
                     kwargs.__dict__.update(user_override)  # apply user override to the keyword argument object
@@ -568,9 +569,9 @@ class ArgSuite(Generic[ArgType]):
             default = proxy.field_default(arg_class, name)
             if arg != default:
                 handler_or_proxy, action = self.handler_actions[f'{prefix}{name}']
-                user_override = getattr(arg_class, f'_{arg_class.__name__}__{name}', {}).get('_serialization', None)
+                serialization_user_override = getattr(arg_class, f'_{arg_class.__name__}__{name}', {}).get('_serialization', None)
                 yield action.option_strings[0]
-                yield from user_override(arg) if user_override else \
+                yield from serialization_user_override(arg) if serialization_user_override else \
                     handler_or_proxy.gen_cli_arg(arg) if isinstance(handler_or_proxy, TypeHandler) else \
                     self._gen_cmd_argv(arg, f'{prefix}{name}.')
 
