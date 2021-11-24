@@ -222,7 +222,7 @@ class TypeHandler:
         return kwargs
 
     def gen_cli_arg(self, arg: Any) -> Iterable[str]:
-        """Generate command line for argument. This define the serialization process.
+        """Generate command line for argument. This defines the serialization process.
 
         :param arg: value of the argument
         :return: iterable command line str"""
@@ -343,7 +343,7 @@ class _dataclasses:
     """dataclass proxy"""
     @staticmethod
     def patch(cls):
-        """Patch the argument dataclass so that `post_validation` is called and it's immutable if not `frozen` after initialization"""
+        """Patch the argument dataclass so that `post_validation` is called, and it's immutable if not `frozen` after initialization"""
         def raise_if_frozen(self, fun, name, *args, **kwargs):
             _raise_if(f"cannot assign to/delete field {name!r}", getattr(self, '__frozen__', False))
             getattr(object, fun)(self, name, *args, **kwargs)
@@ -368,8 +368,11 @@ class _dataclasses:
     new_instance = lambda arg_class, _: arg_class.__original_new__(arg_class)
 
 
+_type_proxies = [_namedtuple, _dataclasses]  # Supported container types. Users can extend it if they know what they are doing. Not officially supported yet.
+
+
 def _get_type_proxy(arg_class):
-    return _namedtuple.proxy(arg_class) or _dataclasses.proxy(arg_class)
+    return next(filter(lambda p: p.proxy(arg_class), _type_proxies), False)
 
 
 def _unwrap_optional(arg_type):
@@ -390,7 +393,7 @@ class ArgSuite(Generic[ArgType]):
 
         :param arg_class: Decorated class
         :param args: Optional positional argument, to be parsed to the arg_class type.
-               `args[0]`: a optional marker to mark the sub-sequence of `argv` to be parsed by the parser. ``None`` will
+               `args[0]`: an optional marker to mark the sub-sequence of `argv` to be parsed by the parser. ``None`` will
                 be interpreted as ``sys.argv[1:]``
                `args[1]`: default to `None`, indicating using the default separator for the argument container class
 
@@ -446,7 +449,7 @@ class ArgSuite(Generic[ArgType]):
 
     def _gen_arguments_from_class(self, arg_class, prefix: str, parent_required, arg_classes: List, type_proxy) -> None:
         """Add argument to the self._parser for each field in the self._arg_class
-        :raise: SmartArgError if cannot find corresponding handler for the argument type"""
+        :raise: SmartArgError if a corresponding handler for the argument type is not found."""
         suite: ArgSuite = getattr(arg_class, '__arg_suite__', None)
         _raise_if(f"Recursively nested argument container class '{arg_class}' is not supported.", arg_class in arg_classes)
         _raise_if(f"Nested argument container class '{arg_class}' with '__post_init__' expected to be decorated.",
@@ -489,7 +492,7 @@ class ArgSuite(Generic[ArgType]):
 
     @staticmethod
     def strip_argv(separator: str, argv: Optional[Sequence[str]]) -> Sequence[str]:
-        """Strip any elements outside of `{separator}+` and `{separator}-` of `argv`.
+        """Strip any elements outside `{separator}+` and `{separator}-` of `argv`.
         :param separator: A string marker prefix to mark the boundaries of the belonging arguments in argv
         :param argv: Input argument list, treated as `sys.argv[1:]` if `None`
         :return: Stripped `argv`"""
@@ -618,7 +621,7 @@ class ArgSuiteDecorator:
     """Generate a decorator to easily convert back and forth from command-line to `NamedTuple` or `dataclass`.
 
     The decorator monkey patches the constructor, so that the IDE would infer the type of
-    the deserialized `arg` for code auto completion and type check::
+    the deserialized `arg` for code auto-completion and type check::
 
         arg: ArgClass = ArgClass.__from_argv__(my_argv)  # Factory method, need the manual type hint `:ArgClass`
         arg = ArgClass(my_argv)  # with monkey-patched constructor, no manual hint needed
