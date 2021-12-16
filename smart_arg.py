@@ -96,7 +96,7 @@ if sys.version_info >= (3, 8):
 elif sys.version_info >= (3, 7):
     # Python == 3.7.x. Defining the back-ported get_origin, get_args
     # 3.7 `List.__origin__ == list`
-    get_origin, get_args = lambda tp: getattr(tp, '__origin__', None), lambda tp: getattr(tp, '__args__', ())
+    get_origin, get_args = lambda tp: getattr(tp, '__origin__', None), lambda tp: getattr(tp, '__args__', [])
 elif sys.version_info >= (3, 6):
     # Python == 3.6.x. Defining the back-ported get_origin, get_args
     # 3.6 `List.__origin__ == List`, `Optional` does not have `__dict__`
@@ -449,8 +449,8 @@ class ArgSuite(Generic[ArgType]):
     def _gen_arguments_from_class(self, arg_class, prefix: str, parent_required, arg_classes: List, type_proxy) -> None:
         """Add argument to the self._parser for each field in the self._arg_class
         :raise: SmartArgError if a corresponding handler for the argument type is not found."""
-        suite: ArgSuite = getattr(arg_class, '__arg_suite__', None)
         _raise_if(f"Recursively nested argument container class '{arg_class}' is not supported.", arg_class in arg_classes)
+        suite = getattr(arg_class, '__arg_suite__', None)
         _raise_if(f"Nested argument container class '{arg_class}' with '__post_init__' expected to be decorated.",
                   not (suite and suite._arg_class is arg_class) and hasattr(arg_class, '__post_init__'))
         self._validate_fields(arg_class)
@@ -527,8 +527,8 @@ class ArgSuite(Generic[ArgType]):
                     type_to_new = get_origin(type_args[0]) if type_origin is Union and len(type_args) == 2 and type_args[1] is NoneType else type_origin
                     # argparse reading variable length arguments are all lists, need to apply the origin type for the conversion to correct type.
                     value = type_to_new(value) if value is not None and isinstance(value, List) else value  # type: ignore
-                else:  # deal with nested container
-                    is_nested_items_defined = any(filter(lambda name: name.startswith(arg_name), arg_dict.keys()))  # consider defined only if there's subfield
+                else:  # deal with nested container, consider defined only if there's subfield
+                    is_nested_items_defined = any(filter(lambda name: name.startswith(arg_name), arg_dict.keys()))  # type: ignore
                     value = to_arg(_unwrap_optional(arg_type)[0], f'{arg_name}.') if is_nested_items_defined else MISSING
                 if value is not MISSING:
                     nest_arg[raw_arg_name] = value
@@ -537,7 +537,7 @@ class ArgSuite(Generic[ArgType]):
         ns, unknown = self._parser.parse_known_args(argv)
         error_on_unknown and unknown and self._parser.error(f"unrecognized arguments: {' '.join(unknown)}")
         logger.info(f"{argv} is parsed to {ns}")
-        arg_dict = {name: value for name, value in vars(ns).items() if value is not MISSING}  # Filter out defaults added by the parser.
+        arg_dict: Dict[str, Any] = {name: value for name, value in vars(ns).items() if value is not MISSING}  # Filter out defaults added by the parser.
         return to_arg(self._arg_class, '')
 
     def post_validation(self, arg: ArgType, prefix: str = '') -> None:
