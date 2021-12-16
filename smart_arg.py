@@ -59,6 +59,7 @@ import sys
 from argparse import Action, ArgumentParser
 from collections import abc
 from enum import EnumMeta, Enum
+from itertools import chain
 from types import SimpleNamespace
 from typing import Any, Callable, Dict, Generic, Iterable, List, NamedTuple, Optional, Sequence, Tuple, Type, TypeVar, Union
 from warnings import warn
@@ -138,10 +139,8 @@ def _raise_if(message: str, condition: Any = True):
 
 
 def _first_handles(with_handles, arg_type, default: Optional[bool] = None):
-    for h in with_handles:
-        if h.handles(arg_type):
-            return h
-    return _raise_if(f"{arg_type!r} is not supported.") if default is None else default
+    handle = next(filter(lambda h: h.handles(arg_type), with_handles), default)
+    return handle if handle is not None else _raise_if(f"{arg_type!r} is not supported.")
 
 
 class PrimitiveHandlerAddon:
@@ -166,7 +165,7 @@ class PrimitiveHandlerAddon:
     def build_metavar(arg_type: Type) -> str:
         """Define the hint string in argument help message for `arg_type`."""
         return '{True, False}' if arg_type is bool else \
-            f"{{{', '.join(str(c) for c in arg_type._member_names_)}}}" if type(arg_type) is EnumMeta else \
+            f"{{{', '.join(map(str, arg_type._member_names_))}}}" if type(arg_type) is EnumMeta else \
             arg_type.__name__
 
     @staticmethod
@@ -227,14 +226,14 @@ class TypeHandler:
         :param arg: value of the argument
         :return: iterable command line str"""
         args = (arg,) if isinstance(arg, str) or not isinstance(arg, Iterable) else arg
-        yield from (_first_handles(self.primitive_addons, type(arg)).build_str(arg) for arg in args)
+        yield from map(lambda a: _first_handles(self.primitive_addons, type(a)).build_str(a), args)
 
     def _type_to_str(self, t: Union[type, Type]) -> str:
         """Convert type to string for ArgumentParser help message
 
         :param t: type of the argument, i.e. float, Dict[str, int], Set[int], List[str] etc.
         :return: string representation of the argument type"""
-        return f'{getattr(t, "_name", "") or t.__name__}[{", ".join(a.__name__ for a in get_args(t))}]'
+        return f'{getattr(t, "_name", "") or t.__name__}[{", ".join(map(lambda a: a.__name__, get_args(t)))}]'
 
     def handles(self, t: Type) -> bool:
         raise NotImplementedError
@@ -271,7 +270,7 @@ class TupleHandler(TypeHandler):
         # get the tuple element types
         types = get_args(arg_type)
         kwargs.nargs = len(types)
-        kwargs.metavar = tuple(_first_handles(self.primitive_addons, t).build_metavar(t) for t in types)
+        kwargs.metavar = tuple(map(lambda t: _first_handles(self.primitive_addons, t).build_metavar(t), types))
         kwargs.type = TupleHandler.__BuildType(types, self.primitive_addons)
 
     def handles(self, t: Type) -> bool:
@@ -307,7 +306,7 @@ class DictHandler(TypeHandler):
 
     def gen_cli_arg(self, arg):
         arg_to_str = lambda arg_v: _first_handles(self.primitive_addons, type(arg_v)).build_str(arg_v)
-        yield from (f'{arg_to_str(k)}:{arg_to_str(v)}' for k, v in arg.items())
+        yield from map(lambda kv: f'{arg_to_str(kv[0])}:{arg_to_str(kv[1])}', arg.items())
 
     def handles(self, t: Type) -> bool:
         args, addons = get_args(t), self.primitive_addons
@@ -333,7 +332,7 @@ class _namedtuple:  # TODO expand lambdas to static methods or use a better hold
         """:return This proxy class if `t` is a `NamedTuple` or `None`"""
         b, f, f_t = getattr(t, '__bases__', []), getattr(t, '_fields', []), getattr(t, '__annotations__', {})
         return _namedtuple if (len(b) == 1 and b[0] is tuple and isinstance(f, tuple) and isinstance(f_t, dict)
-                               and all(type(n) is str for n in f) and all(type(n) is str for n, _ in f_t.items())) else None
+                               and all(map(lambda n: type(n) is str, chain(f, f_t.keys())))) else None
     asdict = lambda args: args._asdict()
     field_default = lambda arg_class, raw_arg_name: arg_class._field_defaults.get(raw_arg_name, MISSING)
     patch = _black_hole  # No need to patch
@@ -405,7 +404,7 @@ class ArgSuite(Generic[ArgType]):
             _raise_if(f"Calling '{arg_class}(positional {args}, keyword {kwargs})' is not allowed:\n"
                       f"Only accept positional arguments to parse to the '{arg_class}'\nkeyword arguments can only be used to create an instance directly.",
                       kwargs or len(args) > 2 or len(args) == 2 and args[1].__class__ not in (NoneType, str)
-                      or not (args[0] is None or isinstance(args[0], Sequence) and all(a.__class__ is str for a in args[0])))
+                      or not (args[0] is None or isinstance(args[0], Sequence) and all(map(lambda a: a.__class__ is str, args[0]))))
 
             return arg_class.__from_argv__(args[0])
         else:
@@ -442,7 +441,7 @@ class ArgSuite(Generic[ArgType]):
         private_prefix = f'_{arg_class.__name__}__'
         l_prefix = len(private_prefix)
         # skip callable methods and typed fields
-        for f in [f for f in (vars(arg_class).keys()) if not callable(getattr(arg_class, f)) and f not in arg_fields]:
+        for f in filter(lambda f: not callable(getattr(arg_class, f)) and f not in arg_fields, vars(arg_class).keys()):
             is_private = f.startswith(private_prefix)
             _raise_if(f"'{arg_class}': there is no field '{f[l_prefix:]}' for '{f}' to override.", is_private and f[l_prefix:] not in arg_fields)
             _raise_if(f"'{arg_class}': found invalid (untyped) field '{f}'.", not (is_private or f.startswith('_')))
@@ -529,7 +528,7 @@ class ArgSuite(Generic[ArgType]):
                     # argparse reading variable length arguments are all lists, need to apply the origin type for the conversion to correct type.
                     value = type_to_new(value) if value is not None and isinstance(value, List) else value  # type: ignore
                 else:  # deal with nested container
-                    is_nested_items_defined = any((name for name in arg_dict.keys() if name.startswith(arg_name)))  # consider defined only if there's subfield
+                    is_nested_items_defined = any(filter(lambda name: name.startswith(arg_name), arg_dict.keys()))  # consider defined only if there's subfield
                     value = to_arg(_unwrap_optional(arg_type)[0], f'{arg_name}.') if is_nested_items_defined else MISSING
                 if value is not MISSING:
                     nest_arg[raw_arg_name] = value
@@ -645,7 +644,7 @@ class ArgSuiteDecorator:
     :return: the argument container class decorator"""
     def __init__(self, type_handlers: Sequence[Type[TypeHandler]] = (), primitive_handler_addons: Sequence[Type[PrimitiveHandlerAddon]] = ()) -> None:
         addons = (*primitive_handler_addons, PrimitiveHandlerAddon)
-        self.handlers = tuple(handler(addons) for handler in (*type_handlers, PrimitiveHandler, CollectionHandler, DictHandler, TupleHandler))
+        self.handlers = tuple(map(lambda handler: handler(addons), chain(type_handlers, (PrimitiveHandler, CollectionHandler, DictHandler, TupleHandler))))
 
     def __call__(self, cls):
         ArgSuite(self.handlers, cls)
